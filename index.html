@@ -617,6 +617,16 @@
 
   .hint { font-size: 12.5px; color: var(--ink-faint); margin-top: 6px; }
 
+  .howto {
+    margin: 0;
+    padding-left: 20px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--ink-muted);
+  }
+  .howto li { margin-bottom: 5px; }
+  .howto strong { color: var(--ink); }
+
   /* ── Recipe detail ─────────────────────────────────────────────────── */
   .recipe-head { padding: 6px 20px 4px; }
 
@@ -1283,7 +1293,7 @@ function expandReceiptWords(name) {
  * Parses one receipt line into a candidate pantry item, or null if the line
  * looks like anything other than a purchased good.
  */
-function parseReceiptLine(rawLine) {
+function parseReceiptLine(rawLine, requirePrice = true) {
   const raw = rawLine.trim();
   if (!raw || raw.length < 3) return null;
   if (RECEIPT_NOISE.test(raw)) return null;
@@ -1302,10 +1312,10 @@ function parseReceiptLine(rawLine) {
     s = s.slice(0, priceMatch.index).trim();
   }
 
-  // Every purchased item on a receipt carries a price. A line without one is
-  // a store header, an address, a loyalty message, or OCR noise — not a good.
-  // This is what keeps "WALMART SUPERCENTER" out of your pantry.
-  if (!sawPrice) return null;
+  // On a real receipt every purchased item carries a price, so a line without
+  // one is a store header, an address, or OCR noise. But that rule is only
+  // safe when the text actually looks like a receipt — see parseReceipt().
+  if (requirePrice && !sawPrice) return null;
 
   // "1.87 lb @ 4.99/lb" — weight priced by the pound.
   const weighed = s.match(/(\d+\.?\d*)\s*(lb|lbs|kg|oz|g)\b\s*@\s*\$?\d+\.?\d*/i);
@@ -1367,11 +1377,21 @@ function parseReceiptLine(rawLine) {
   };
 }
 
+/**
+ * Two passes, because the box takes two very different kinds of text.
+ *
+ * A scanned receipt has prices, and requiring one is what keeps store headers
+ * and card lines out. A hand-typed or partially-scanned list has none, and
+ * that same rule would reject every line — so when nothing at all carries a
+ * price, treat the text as a plain list of items instead of refusing it.
+ */
 function parseReceipt(text) {
-  return String(text)
-    .split('\n')
-    .map(parseReceiptLine)
-    .filter(Boolean);
+  const lines = String(text).split('\n');
+
+  const priced = lines.map((l) => parseReceiptLine(l, true)).filter(Boolean);
+  if (priced.length) return priced;
+
+  return lines.map((l) => parseReceiptLine(l, false)).filter(Boolean);
 }
 
 /* ---- availability --------------------------------------------------- */
@@ -2001,15 +2021,26 @@ function importReceipt() {
   const body = `
     <div class="field">
       <label for="rcptText">Receipt text</label>
-      <textarea class="input" id="rcptText" style="min-height:170px" placeholder="Tap in here, then long-press and choose Scan Text to point your camera at the receipt."></textarea>
-      <p class="hint"><strong>Long-press this box → Scan Text</strong> to use your phone’s camera. Your iPhone does the reading on-device; nothing is uploaded anywhere.</p>
+      <textarea class="input" id="rcptText" style="min-height:160px" placeholder="Paste the receipt text here — or just type what you bought, one item per line."></textarea>
+    </div>
+    <div class="field">
+      <label>Getting the text off a receipt</label>
+      <ol class="howto">
+        <li>Photograph the receipt with the Camera app.</li>
+        <li>Open it in <strong>Photos</strong> and tap the <strong>Live Text</strong> button — the little box of lines at the bottom right.</li>
+        <li><strong>Select All → Copy</strong>, then come back and paste above.</li>
+      </ol>
+      <p class="hint">Your iPhone reads the text itself; nothing is uploaded anywhere. If you tap into the box above and long-press, iOS may also offer <strong>Scan Text</strong> — handy when it appears, but it isn’t offered on every version.</p>
     </div>`;
 
   openSheet('Scan a receipt', body, 'Read it', () => {
     const text = $('#rcptText').value.trim();
-    if (!text) { toast('Scan or paste a receipt first.'); $('#rcptText').focus(); return; }
+    if (!text) { toast('Paste or type something first.'); $('#rcptText').focus(); return; }
     const items = parseReceipt(text);
-    if (!items.length) { toast("Couldn't find any items in that."); return; }
+    if (!items.length) {
+      toast('Nothing there looked like food. Try one item per line.');
+      return;
+    }
     closeSheet();
     reviewReceipt(items);
   });
@@ -2931,16 +2962,36 @@ async function openSettings() {
   });
 
   $('#bkSave').onclick = async () => {
-    const downloads = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
-    if (!downloads) {
-      toast('File saving is unavailable here — use Copy instead.');
+    const filename = backupFilename();
+    const payload = backupPayload();
+
+    // Inside a Claude artifact the page cannot start its own download and has
+    // to ask the host. Served from a normal web host there is no host to ask,
+    // and an object-URL link is the way — on iOS this lands in Files.
+    const host = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
+    if (host) {
+      try {
+        await host.save({ filename, data: payload });
+        toast('Backup saved');
+      } catch {
+        toast('Save was cancelled — Copy still works.');
+      }
       return;
     }
+
     try {
-      await downloads.save({ filename: backupFilename(), data: backupPayload() });
-      toast('Backup saved');
+      const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      toast('Backup downloaded');
     } catch {
-      toast('Save was cancelled or blocked — Copy still works.');
+      toast('Download was blocked — use Copy to clipboard instead.');
     }
   };
 
