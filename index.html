@@ -1442,6 +1442,10 @@ function deductionPlan(recipe, pantry, aliases) {
     const match = findPantryMatch(ing.nameKey, pantry, aliases);
 
     if (!match) return { ing, match: null, status: 'unmatched', amount: null };
+    // An entry sitting at zero is not stock. Offering to take three eggs from
+    // a count of zero is nonsense, and it silently under-reports what you
+    // actually need to buy.
+    if (match.quantity <= 0) return { ing, match, status: 'none-left', amount: null };
     if (ing.quantity == null || !ing.unit) {
       return { ing, match, status: 'unknown-amount', amount: null };
     }
@@ -1484,7 +1488,12 @@ function availabilityFor(ing, pantry, aliases) {
    ══════════════════════════════════════════════════════════════════════ */
 const STORAGE_KEY = 'mise.v1';
 
-const blank = () => ({ pantry: [], list: [], recipes: [], aliases: {}, history: [] });
+const DEFAULT_SETTINGS = { removeAtZero: false };
+
+const blank = () => ({
+  pantry: [], list: [], recipes: [], aliases: {}, history: [],
+  settings: { ...DEFAULT_SETTINGS },
+});
 
 /**
  * Writes a probe and reads it back, because "localStorage exists" is not the
@@ -1515,7 +1524,10 @@ function load() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return blank();
     const parsed = JSON.parse(raw);
-    return Object.assign(blank(), parsed);
+    const merged = Object.assign(blank(), parsed);
+    // Settings gain keys over time; fill in any the saved copy predates.
+    merged.settings = Object.assign({ ...DEFAULT_SETTINGS }, parsed.settings || {});
+    return merged;
   } catch (err) {
     console.warn('[mise] could not read saved data, starting empty', err);
     return blank();
@@ -1597,6 +1609,7 @@ function applyBackup(text) {
     recipes: data.recipes || [],
     aliases: data.aliases || {},
     history: data.history || [],
+    settings: Object.assign({ ...DEFAULT_SETTINGS }, data.settings || {}),
   });
   save();
   return {
@@ -1644,6 +1657,38 @@ function buyAgainCandidates() {
 }
 
 const LOCATIONS = ['fridge', 'freezer', 'pantry', 'spices', 'other'];
+
+/**
+ * Drops emptied pantry entries when "remove at zero" is on. Returns the names
+ * removed so the caller can offer to put them on the shopping list — running
+ * out is exactly when you want that.
+ *
+ * Off by default: an entry at zero is still a useful record of something you
+ * normally keep, and "buy it again" already remembers what you buy.
+ */
+function pruneZeroed() {
+  if (!state.settings.removeAtZero) return [];
+  const gone = state.pantry.filter((p) => p.quantity <= 0);
+  if (!gone.length) return [];
+  state.pantry = state.pantry.filter((p) => p.quantity > 0);
+  return gone.map((p) => p.name);
+}
+
+/** Puts names on the shopping list, skipping anything already active there. */
+function addNamesToList(names) {
+  let added = 0;
+  for (const name of names) {
+    const nameKey = normalizeName(name);
+    if (state.list.some((i) => !i.checked && i.nameKey === nameKey)) continue;
+    state.list.push({
+      id: uid(), name, nameKey, quantity: null, unit: 'count', note: null,
+      category: guessCategory(name), checked: false, checkedAt: null,
+      sourceRecipeId: null, addedAt: Date.now(),
+    });
+    added++;
+  }
+  return added;
+}
 
 /* ══════════════════════════════════════════════════════════════════════
    UI HELPERS
@@ -1858,8 +1903,19 @@ function adjustPantry(id, delta) {
   if (!it) return;
   it.quantity = Math.max(0, Math.round((it.quantity + delta) * 100) / 100);
   it.updatedAt = Date.now();
+
+  const removed = pruneZeroed();
   save();
-  renderPantry();
+  render();
+
+  if (removed.length) {
+    toast(`${removed[0]} removed — you're out`, 'Add to list', () => {
+      const n = addNamesToList(removed);
+      save();
+      render();
+      toast(`${n} added to your list`);
+    });
+  }
 }
 
 function editPantryItem(id) {
@@ -2384,8 +2440,12 @@ function summarize(recipe) {
   return { missing, short, unverified, have };
 }
 
+/* "missing" and "unmatched" stay separate internally — only a genuinely
+   unknown ingredient gets the "link to a pantry item" tap — but they read the
+   same, because having none of something and never having had it are the same
+   fact to a cook. */
 const STATE_LABEL = {
-  have: 'have', short: 'short', missing: 'missing',
+  have: 'have', short: 'short', missing: 'not in pantry',
   unverified: 'amount unverified', unmatched: 'not in pantry',
 };
 
@@ -2610,6 +2670,7 @@ function editRecipe(id, prefill) {
 /* ---- "I made this" UI ----------------------------------------------- */
 const DEDUCT_NOTE = {
   'unmatched': 'not in your pantry',
+  'none-left': 'you have none left',
   'unknown-amount': 'no amount given — skipped',
   'unconvertible': "can't convert to your unit — skipped",
   'more-than-you-have': 'more than you have; will empty it',
@@ -2665,6 +2726,7 @@ function openMadeIt(recipe) {
       used++;
     });
 
+    pruneZeroed();
     save();
     closeSheet();
     render();
@@ -2674,17 +2736,7 @@ function openMadeIt(recipe) {
     // Running out is exactly when you want it on the shopping list.
     if (emptied.length) {
       toast(`${used} taken · ${emptied.length} ran out`, 'Add to list', () => {
-        let n = 0;
-        for (const name of emptied) {
-          const nameKey = normalizeName(name);
-          if (state.list.some((i) => !i.checked && i.nameKey === nameKey)) continue;
-          state.list.push({
-            id: uid(), name, nameKey, quantity: null, unit: 'count', note: null,
-            category: guessCategory(name), checked: false, checkedAt: null,
-            sourceRecipeId: null, addedAt: Date.now(),
-          });
-          n++;
-        }
+        const n = addNamesToList(emptied);
         save();
         render();
         toast(`${n} added to your list`);
@@ -2825,8 +2877,18 @@ async function openSettings() {
   let durable = false;
   try { durable = !!(navigator.storage && navigator.storage.persisted && await navigator.storage.persisted()); } catch {}
 
+  const zeroed = state.pantry.filter((p) => p.quantity <= 0).length;
+
   const body = `
     <p class="hint" style="margin-top:0">${esc(counts)}</p>
+    <div class="field">
+      <label>When something hits zero</label>
+      <div class="segment" style="width:100%" role="group" aria-label="When something hits zero">
+        <button type="button" data-zero="keep" style="flex:1" aria-pressed="${!state.settings.removeAtZero}">Keep it at 0</button>
+        <button type="button" data-zero="remove" style="flex:1" aria-pressed="${state.settings.removeAtZero}">Remove it</button>
+      </div>
+      <p class="hint">Keeping it leaves a reminder of something you normally stock. Removing it keeps the pantry to what you actually have — either way, Mise offers to put it on your shopping list.${zeroed ? ` <strong>${zeroed} item${zeroed === 1 ? ' is' : 's are'} at zero right now.</strong>` : ''}</p>
+    </div>
     <div class="field">
       <label>Keep a copy</label>
       <div style="display:flex;flex-direction:column;gap:9px">
@@ -2843,7 +2905,30 @@ async function openSettings() {
       <p class="hint">Restoring replaces your current pantry, list and recipes.</p>
     </div>`;
 
-  openSheet('Backup & restore', body, 'Done', closeSheet);
+  openSheet('Settings', body, 'Done', closeSheet);
+
+  document.querySelectorAll('[data-zero]').forEach((b) => {
+    b.onclick = () => {
+      const remove = b.dataset.zero === 'remove';
+      state.settings.removeAtZero = remove;
+      document.querySelectorAll('[data-zero]').forEach((x) =>
+        x.setAttribute('aria-pressed', String((x.dataset.zero === 'remove') === remove))
+      );
+
+      const removed = remove ? pruneZeroed() : [];
+      save();
+      render();
+
+      if (removed.length) {
+        toast(`${removed.length} emptied item${removed.length === 1 ? '' : 's'} removed`, 'Add to list', () => {
+          const n = addNamesToList(removed);
+          save();
+          render();
+          toast(`${n} added to your list`);
+        });
+      }
+    };
+  });
 
   $('#bkSave').onclick = async () => {
     const downloads = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
