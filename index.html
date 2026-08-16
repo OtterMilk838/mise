@@ -112,6 +112,28 @@
     color: inherit;
   }
 
+  /* Kills the double-tap-to-zoom delay, so hammering +/- adjusts a quantity
+     instead of zooming the page. `manipulation` still permits pinch-zoom —
+     unlike user-scalable=no, which would take that away from anyone who
+     needs it to read the screen. */
+  body,
+  button,
+  .tab,
+  .chip,
+  .check,
+  .row,
+  .stepper button,
+  .segment button {
+    touch-action: manipulation;
+  }
+
+  /* Also stop iOS selecting label text on a fast double tap of a control. */
+  button, .tab, .chip, .check, .stepper, .segment {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   :focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
@@ -1668,6 +1690,62 @@ function recordPurchase({ name, nameKey, quantity, unit, category }) {
   }
 }
 
+/** What you bought last time under this name, or null. */
+function recallPurchase(name) {
+  const key = normalizeName(name || '');
+  if (!key) return null;
+  return state.history.find((h) => h.nameKey === key) || null;
+}
+
+/**
+ * Wires "remember what I bought last time" onto an add form.
+ *
+ * Typing a name you've bought before fills in the amount, unit and category
+ * from that purchase — eggs come back as 12 without you saying so. It stops
+ * the moment you touch any of those fields yourself, so it suggests rather
+ * than fights you.
+ */
+function attachRecall({ nameInput, qtyInput, unitGroup, catGroup, hintEl }) {
+  let auto = true;
+
+  const stopAuto = () => {
+    auto = false;
+    if (hintEl) hintEl.textContent = '';
+  };
+  if (qtyInput) qtyInput.addEventListener('input', stopAuto);
+  [unitGroup, catGroup].filter(Boolean).forEach((id) => {
+    document.querySelectorAll(`#${id} .chip`).forEach((c) => c.addEventListener('click', stopAuto));
+  });
+
+  const press = (groupId, value) => {
+    if (!groupId || value == null) return;
+    document.querySelectorAll(`#${groupId} .chip`).forEach((c) =>
+      c.setAttribute('aria-pressed', String(c.dataset.value === value))
+    );
+  };
+
+  nameInput.addEventListener('input', () => {
+    if (!auto) return;
+    const typed = nameInput.value.trim();
+    const past = recallPurchase(typed);
+
+    if (past) {
+      if (qtyInput && past.quantity != null) qtyInput.value = formatQuantity(past.quantity);
+      press(unitGroup, past.unit);
+      press(catGroup, past.category);
+      if (hintEl) {
+        const amount = past.quantity != null ? `${formatQuantity(past.quantity)} ${unitLabel(past.unit) || ''}`.trim() : past.unit;
+        hintEl.textContent = `Last time you bought ${amount} — change it if this trip is different.`;
+      }
+      return;
+    }
+
+    // Nothing bought before under this name: fall back to guessing a category.
+    press(catGroup, typed ? guessCategory(typed) : null);
+    if (hintEl) hintEl.textContent = '';
+  });
+}
+
 /** Most-bought first, then most-recent. Things already on the list are hidden. */
 function buyAgainCandidates() {
   const onList = new Set(state.list.filter((i) => !i.checked).map((i) => i.nameKey));
@@ -1949,6 +2027,7 @@ function editPantryItem(id) {
       <div class="field">
         <label for="pQty">Quantity</label>
         <input class="input" id="pQty" inputmode="decimal" value="${existing ? formatQuantity(existing.quantity) : '1'}">
+        <p class="hint" id="pRecall"></p>
       </div>
     </div>
     <div class="field">
@@ -1989,21 +2068,19 @@ function editPantryItem(id) {
     render();
   }, existing ? `<button class="linkish" id="pDelete">Delete</button>` : '');
 
-  // Auto-guess category while typing, until the user picks one themselves.
-  let auto = !existing;
-  const nameInput = $('#pName');
-  nameInput.addEventListener('input', () => {
-    if (!auto) return;
-    const guess = nameInput.value.trim() ? guessCategory(nameInput.value) : null;
-    document.querySelectorAll('#pCat .chip').forEach((c) =>
-      c.setAttribute('aria-pressed', String(c.dataset.value === guess))
-    );
-  });
-  document.querySelectorAll('#pCat .chip').forEach((c) => c.addEventListener('click', () => {
-    auto = false;
-    const hint = $('#pCatHint');
-    if (hint) hint.textContent = '';
-  }));
+  if (!existing) {
+    attachRecall({
+      nameInput: $('#pName'),
+      qtyInput: $('#pQty'),
+      unitGroup: 'pUnit',
+      catGroup: 'pCat',
+      hintEl: $('#pRecall'),
+    });
+    document.querySelectorAll('#pCat .chip').forEach((c) => c.addEventListener('click', () => {
+      const hint = $('#pCatHint');
+      if (hint) hint.textContent = '';
+    }));
+  }
 
   const del = $('#pDelete');
   if (del) del.onclick = () => {
@@ -2356,6 +2433,7 @@ function editListItem(id) {
       <div class="field">
         <label for="lQty">Quantity</label>
         <input class="input" id="lQty" inputmode="decimal" placeholder="optional" value="${existing?.quantity != null ? formatQuantity(existing.quantity) : ''}">
+        <p class="hint" id="lRecall"></p>
       </div>
     </div>
     <div class="field">
@@ -2395,14 +2473,13 @@ function editListItem(id) {
     render();
   }, existing ? `<button class="linkish" id="lDelete">Delete</button>` : '');
 
-  const auto = !existing;
-  if (auto) {
-    const nameInput = $('#lName');
-    nameInput.addEventListener('input', () => {
-      const guess = nameInput.value.trim() ? guessCategory(nameInput.value) : null;
-      document.querySelectorAll('#lCat .chip').forEach((c) =>
-        c.setAttribute('aria-pressed', String(c.dataset.value === guess))
-      );
+  if (!existing) {
+    attachRecall({
+      nameInput: $('#lName'),
+      qtyInput: $('#lQty'),
+      unitGroup: 'lUnit',
+      catGroup: 'lCat',
+      hintEl: $('#lRecall'),
     });
   }
 
