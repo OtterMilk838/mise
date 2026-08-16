@@ -3068,54 +3068,224 @@ function importRecipe() {
    Written for Mise, not copied from any cookbook. */
 const CATALOGUE_RAW = [
   {
-    title: 'Buttermilk pancakes', servings: 4,
+    title: 'Buttermilk pancakes', servings: 4, tags: ['breakfast'],
     ingredients: ['2 cups all-purpose flour', '2 tbsp sugar', '2 tsp baking powder', '1 tsp baking soda', '1 tsp salt', '2 large eggs', '2 cups buttermilk', '3 tbsp butter, melted'],
     steps: ['Whisk the flour, sugar, baking powder, baking soda and salt in a large bowl.', 'In a second bowl beat the eggs, then whisk in the buttermilk and melted butter.', 'Pour the wet into the dry and stir just until combined — lumps are fine, overmixing makes them tough.', 'Rest the batter for 5 minutes while a griddle heats over medium.', 'Cook about 2 minutes per side, flipping when bubbles open on the surface and the edges look dry.'],
   },
   {
-    title: 'Chocolate chip cookies', servings: 24,
-    ingredients: ['2 1/4 cups all-purpose flour', '1 tsp baking soda', '1 tsp salt', '1 cup butter, softened', '3/4 cup sugar', '3/4 cup brown sugar', '2 large eggs', '2 tsp vanilla extract', '2 cups chocolate chips'],
-    steps: ['Heat the oven to 375°F and line two sheet pans.', 'Whisk the flour, baking soda and salt together.', 'Beat the butter with both sugars until light, about 3 minutes.', 'Beat in the eggs one at a time, then the vanilla.', 'Mix in the dry ingredients on low, then fold in the chocolate chips.', 'Drop rounded tablespoons two inches apart and bake for 10 minutes, until the edges are set but the centers still look soft.', 'Cool on the pan for 5 minutes before moving them.'],
+    title: 'Buttermilk waffles', servings: 4, tags: ['breakfast'],
+    ingredients: ['2 cups all-purpose flour', '2 tbsp sugar', '1 tbsp baking powder', '1 tsp salt', '2 large eggs, separated', '1 3/4 cups buttermilk', '1/2 cup butter, melted'],
+    steps: ['Heat the waffle iron.', 'Whisk the dry ingredients together in a large bowl.', 'Beat the egg yolks with the buttermilk and melted butter, then stir into the dry ingredients.', 'Whip the egg whites to soft peaks and fold them through — this is what makes them light rather than dense.', 'Cook about 4 minutes per waffle, until the steam slows and the outside is crisp.'],
   },
   {
-    title: 'Banana bread', servings: 8,
-    ingredients: ['3 ripe bananas, mashed', '1/3 cup butter, melted', '3/4 cup sugar', '1 large egg', '1 tsp vanilla extract', '1 tsp baking soda', '1/2 tsp salt', '1 1/2 cups all-purpose flour'],
-    steps: ['Heat the oven to 350°F and butter a loaf pan.', 'Mix the mashed bananas with the melted butter.', 'Stir in the sugar, egg and vanilla.', 'Sprinkle the baking soda and salt over the top and stir through.', 'Fold in the flour just until no dry streaks remain.', 'Pour into the pan and bake for 55 minutes, until a skewer comes out clean.'],
+    title: 'French toast', servings: 4, tags: ['breakfast', 'quick'],
+    ingredients: ['8 slices bread', '4 large eggs', '1 cup milk', '2 tbsp sugar', '1 tsp vanilla extract', '1/2 tsp cinnamon', '2 tbsp butter'],
+    steps: ['Whisk the eggs, milk, sugar, vanilla and cinnamon in a shallow dish.', 'Soak each slice for about 20 seconds a side — long enough to wet through, not so long it falls apart.', 'Melt butter in a skillet over medium heat.', 'Cook for 3 minutes per side, until deep golden and no longer custardy in the middle.'],
   },
   {
-    title: 'Roast chicken', servings: 4,
+    title: 'Soft scrambled eggs', servings: 2, tags: ['breakfast', 'quick'],
+    ingredients: ['6 large eggs', '2 tbsp butter', '2 tbsp cream', '1/2 tsp salt'],
+    steps: ['Beat the eggs with the cream and salt until completely uniform in color.', 'Melt the butter in a nonstick pan over low heat — low is the whole trick.', 'Add the eggs and stir constantly with a spatula, pulling them from the edges inward.', 'Take them off the heat while they still look slightly underdone; they finish in the pan.'],
+  },
+  {
+    title: 'Baked oatmeal', servings: 6, tags: ['breakfast'],
+    ingredients: ['3 cups oats', '1/2 cup brown sugar', '2 tsp cinnamon', '1 tsp baking powder', '1/2 tsp salt', '2 cups milk', '2 large eggs', '1/3 cup butter, melted', '2 apples, diced'],
+    steps: ['Heat the oven to 350F and butter a baking dish.', 'Stir the oats, brown sugar, cinnamon, baking powder and salt together.', 'Whisk the milk, eggs and melted butter, then combine with the dry mixture and fold in the apples.', 'Bake for 40 minutes, until set in the center and browned at the edges.'],
+  },
+  {
+    title: 'Sausage breakfast casserole', servings: 8, tags: ['breakfast'],
+    ingredients: ['1 lb sausage', '8 large eggs', '2 cups milk', '6 slices bread, cubed', '2 cups cheddar cheese, shredded', '1 tsp salt', '1/2 tsp black pepper'],
+    steps: ['Brown the sausage in a skillet, breaking it up, then drain.', 'Scatter the bread and sausage in a buttered baking dish and top with the cheese.', 'Whisk the eggs, milk, salt and pepper and pour over the top.', 'Refrigerate for 1 hour so the bread soaks through.', 'Bake at 350F for 50 minutes, until puffed and set in the middle.'],
+  },
+  {
+    title: 'Blueberry muffins', servings: 12, tags: ['breakfast', 'baking'],
+    ingredients: ['2 cups all-purpose flour', '3/4 cup sugar', '2 tsp baking powder', '1/2 tsp salt', '1 large egg', '1 cup milk', '1/3 cup butter, melted', '1 1/2 cups blueberries'],
+    steps: ['Heat the oven to 400F and line a muffin tin.', 'Whisk the flour, sugar, baking powder and salt together.', 'Beat the egg with the milk and melted butter, then stir into the dry ingredients until just combined.', 'Fold in the blueberries.', 'Fill the cups two-thirds full and bake for 20 minutes, until springy on top.'],
+  },
+  {
+    title: 'Cinnamon rolls', servings: 12, tags: ['breakfast', 'baking'],
+    ingredients: ['4 cups all-purpose flour', '1/4 cup sugar', '2 tsp yeast', '1 tsp salt', '1 cup milk, warm', '1/3 cup butter, softened', '2 large eggs', '3/4 cup brown sugar', '2 tbsp cinnamon'],
+    steps: ['Mix the flour, sugar, yeast and salt in a large bowl.', 'Add the warm milk, half the butter and the eggs, and knead for 8 minutes until smooth and elastic.', 'Cover and let rise for 60 minutes, until doubled.', 'Roll into a rectangle, spread with the remaining butter and scatter the brown sugar and cinnamon over it.', 'Roll up tightly, cut into 12, and let rise for 30 minutes in a buttered dish.', 'Bake at 350F for 25 minutes, until golden.'],
+  },
+  {
+    title: 'Roast chicken', servings: 4, tags: ['dinner'],
     ingredients: ['1 whole chicken, about 4 lb', '2 tbsp butter, softened', '1 tsp salt', '1 tsp black pepper', '1 lemon, halved', '4 cloves garlic', '2 sprigs thyme'],
-    steps: ['Heat the oven to 425°F and pat the chicken completely dry.', 'Rub the butter over the skin and season generously inside and out.', 'Put the lemon, garlic and thyme in the cavity and tie the legs together.', 'Roast for 60 minutes, until the thickest part of the thigh reads 165°F.', 'Rest for 15 minutes before carving — this is not optional if you want it juicy.'],
+    steps: ['Heat the oven to 425F and pat the chicken completely dry.', 'Rub the butter over the skin and season generously inside and out.', 'Put the lemon, garlic and thyme in the cavity and tie the legs together.', 'Roast for 60 minutes, until the thickest part of the thigh reads 165F.', 'Rest for 15 minutes before carving — this is not optional if you want it juicy.'],
   },
   {
-    title: 'Beef chili', servings: 6,
+    title: 'Meatloaf', servings: 6, tags: ['dinner'],
+    ingredients: ['2 lb ground beef', '1 cup breadcrumbs', '1 onion, minced', '2 large eggs', '1/2 cup milk', '2 tbsp ketchup', '1 tsp salt', '1 tsp black pepper'],
+    steps: ['Heat the oven to 350F.', 'Soak the breadcrumbs in the milk for 5 minutes — this is what keeps it from drying out.', 'Mix everything together with your hands, stopping as soon as it is combined.', 'Shape into a loaf on a lined sheet pan and brush the top with a little extra ketchup.', 'Bake for 60 minutes, until the center reads 160F.', 'Rest for 10 minutes before slicing.'],
+  },
+  {
+    title: 'Beef chili', servings: 6, tags: ['dinner'],
     ingredients: ['2 lb ground beef', '1 large onion, diced', '4 cloves garlic, minced', '3 tbsp chili powder', '1 tbsp cumin', '1 tsp oregano', '28 oz canned crushed tomatoes', '2 cups beef broth', '30 oz canned kidney beans, drained', '1 tsp salt'],
     steps: ['Brown the beef in a heavy pot over medium-high heat, breaking it up as it cooks.', 'Add the onion and cook for 5 minutes until softened.', 'Stir in the garlic and spices and cook for 1 minute, until fragrant.', 'Add the tomatoes and broth, scraping the bottom of the pot.', 'Simmer uncovered for 45 minutes, stirring now and then.', 'Add the beans and cook for 15 minutes more. Taste and adjust the salt.'],
   },
   {
-    title: 'Baked macaroni and cheese', servings: 6,
+    title: 'Spaghetti and meatballs', servings: 6, tags: ['dinner'],
+    ingredients: ['1 lb ground beef', '1/2 lb ground pork', '1 cup breadcrumbs', '1/2 cup parmesan cheese', '2 large eggs', '4 cloves garlic, minced', '28 oz canned crushed tomatoes', '1 onion, diced', '2 tbsp olive oil', '1 lb spaghetti', '1 tsp salt'],
+    steps: ['Mix the beef, pork, breadcrumbs, parmesan, eggs and half the garlic, and roll into balls.', 'Brown the meatballs in the olive oil on all sides, then set them aside.', 'Cook the onion in the same pot for 5 minutes, then add the remaining garlic for 1 minute.', 'Add the tomatoes and salt, return the meatballs, and simmer for 30 minutes.', 'Boil the spaghetti and serve the sauce over it.'],
+  },
+  {
+    title: 'Chicken pot pie', servings: 6, tags: ['dinner'],
+    ingredients: ['1 lb chicken breast, cooked and diced', '1/4 cup butter', '1/3 cup all-purpose flour', '2 cups chicken broth', '1 cup milk', '3 cups mixed vegetables', '1 tsp salt', '1/2 tsp black pepper', '2 pie crusts'],
+    steps: ['Heat the oven to 400F.', 'Melt the butter in a pot, whisk in the flour and cook for 1 minute.', 'Add the broth and milk slowly, whisking, and cook until thickened — about 5 minutes.', 'Stir in the chicken, vegetables, salt and pepper.', 'Pour into a crust-lined dish, top with the second crust and cut vents.', 'Bake for 35 minutes, until the crust is deep golden.'],
+  },
+  {
+    title: 'Beef stew', servings: 6, tags: ['dinner'],
+    ingredients: ['2 lb beef chuck, cubed', '3 tbsp all-purpose flour', '3 tbsp oil', '1 onion, diced', '4 carrots, chopped', '3 potatoes, cubed', '4 cups beef broth', '2 tbsp tomato paste', '2 sprigs thyme', '1 tsp salt'],
+    steps: ['Toss the beef in the flour and brown it in the oil in batches — crowding the pot steams it instead.', 'Cook the onion for 5 minutes, then stir in the tomato paste for 1 minute.', 'Return the beef, add the broth and thyme, and simmer covered for 90 minutes.', 'Add the carrots and potatoes and cook for 30 minutes more, until everything is tender.'],
+  },
+  {
+    title: 'Pot roast', servings: 8, tags: ['dinner'],
+    ingredients: ['4 lb beef chuck roast', '2 tbsp oil', '1 onion, quartered', '4 carrots, chopped', '3 cups beef broth', '2 tbsp tomato paste', '4 cloves garlic', '2 tsp salt'],
+    steps: ['Heat the oven to 325F.', 'Season the roast well and sear it in oil on all sides until browned.', 'Add the onion, carrots, garlic, tomato paste and broth to the pot.', 'Cover and braise in the oven for 3 hours, until it pulls apart with a fork.', 'Rest for 15 minutes, then slice against the grain.'],
+  },
+  {
+    title: 'Shepherds pie', servings: 6, tags: ['dinner'],
+    ingredients: ['1 1/2 lb ground beef', '1 onion, diced', '2 carrots, diced', '2 tbsp tomato paste', '1 cup beef broth', '2 lb potatoes', '1/2 cup milk', '4 tbsp butter', '1 tsp salt'],
+    steps: ['Boil the potatoes until tender, then mash with the milk, butter and salt.', 'Brown the beef with the onion and carrots.', 'Stir in the tomato paste and broth and simmer for 10 minutes until thickened.', 'Spread the meat in a baking dish, top with the mash and rough up the surface with a fork so it crisps.', 'Bake at 400F for 25 minutes, until browned on top.'],
+  },
+  {
+    title: 'Lasagna', servings: 8, tags: ['dinner'],
+    ingredients: ['1 lb ground beef', '28 oz canned crushed tomatoes', '1 onion, diced', '3 cloves garlic, minced', '15 oz ricotta cheese', '2 large eggs', '4 cups mozzarella cheese, shredded', '1 cup parmesan cheese', '12 lasagna noodles', '1 tsp salt'],
+    steps: ['Brown the beef with the onion, add the garlic, tomatoes and salt, and simmer for 20 minutes.', 'Mix the ricotta with the eggs and half the parmesan.', 'Layer sauce, noodles, ricotta and mozzarella twice in a baking dish, finishing with sauce and cheese.', 'Cover with foil and bake at 375F for 40 minutes.', 'Uncover and bake for 15 minutes more, until bubbling and browned.', 'Rest for 15 minutes before cutting or it will slide apart.'],
+  },
+  {
+    title: 'Baked macaroni and cheese', servings: 6, tags: ['dinner', 'side'],
     ingredients: ['1 lb elbow pasta', '4 tbsp butter', '4 tbsp all-purpose flour', '3 cups milk', '1 tsp salt', '1/2 tsp black pepper', '4 cups cheddar cheese, shredded', '1/2 cup breadcrumbs'],
-    steps: ['Heat the oven to 375°F. Boil the pasta two minutes short of the package time and drain.', 'Melt the butter in the same pot, whisk in the flour and cook for 1 minute.', 'Pour in the milk slowly, whisking, and cook until it thickens — about 5 minutes.', 'Off the heat, stir in the salt, pepper and three quarters of the cheese until smooth.', 'Fold in the pasta, tip into a baking dish, and top with the rest of the cheese and the breadcrumbs.', 'Bake for 25 minutes, until bubbling and browned on top.'],
+    steps: ['Heat the oven to 375F. Boil the pasta two minutes short of the package time and drain.', 'Melt the butter in the same pot, whisk in the flour and cook for 1 minute.', 'Pour in the milk slowly, whisking, and cook until it thickens — about 5 minutes.', 'Off the heat, stir in the salt, pepper and three quarters of the cheese until smooth.', 'Fold in the pasta, tip into a baking dish, and top with the rest of the cheese and the breadcrumbs.', 'Bake for 25 minutes, until bubbling and browned on top.'],
   },
   {
-    title: 'Buttermilk biscuits', servings: 8,
-    ingredients: ['2 cups all-purpose flour', '1 tbsp baking powder', '1 tsp salt', '6 tbsp butter, cold', '3/4 cup buttermilk, cold'],
-    steps: ['Heat the oven to 450°F.', 'Whisk the flour, baking powder and salt together.', 'Cut the cold butter in until the mixture looks like coarse crumbs with some pea-sized pieces left.', 'Stir in the buttermilk just until it comes together — the dough should look shaggy.', 'Pat to one inch thick on a floured counter, fold it over on itself three times, then pat out again and cut rounds.', 'Bake for 12 minutes, until risen and golden.'],
+    title: 'Tuna noodle casserole', servings: 6, tags: ['dinner'],
+    ingredients: ['12 oz egg noodles', '2 cans tuna, drained', '4 tbsp butter', '1/4 cup all-purpose flour', '3 cups milk', '2 cups peas', '2 cups cheddar cheese, shredded', '1 tsp salt', '1 cup breadcrumbs'],
+    steps: ['Boil the noodles until just short of tender and drain.', 'Melt the butter, whisk in the flour, then add the milk and cook until thickened.', 'Stir in the cheese and salt until smooth, then fold in the tuna, peas and noodles.', 'Tip into a baking dish, top with breadcrumbs, and bake at 375F for 25 minutes.'],
   },
   {
-    title: 'Tomato soup', servings: 4,
+    title: 'Sloppy joes', servings: 6, tags: ['dinner', 'quick'],
+    ingredients: ['1 1/2 lb ground beef', '1 onion, diced', '1 pepper, diced', '1 cup ketchup', '2 tbsp brown sugar', '1 tbsp vinegar', '1 tsp salt', '6 buns'],
+    steps: ['Brown the beef with the onion and pepper, then drain the fat.', 'Stir in the ketchup, brown sugar, vinegar and salt.', 'Simmer for 15 minutes, until thick enough to sit on a bun without running.', 'Spoon onto the buns.'],
+  },
+  {
+    title: 'Beef tacos', servings: 4, tags: ['dinner', 'quick'],
+    ingredients: ['1 lb ground beef', '1 onion, diced', '2 tbsp chili powder', '1 tsp cumin', '1 tsp paprika', '1/2 cup water', '8 tortillas', '2 cups lettuce, shredded', '1 cup cheddar cheese, shredded', '2 tomatoes, diced'],
+    steps: ['Brown the beef with the onion and drain.', 'Add the spices and water and simmer for 5 minutes, until the liquid is nearly gone.', 'Warm the tortillas in a dry pan.', 'Fill and top with lettuce, cheese and tomato.'],
+  },
+  {
+    title: 'Pan-seared pork chops', servings: 4, tags: ['dinner', 'quick'],
+    ingredients: ['4 pork chops', '1 tsp salt', '1/2 tsp black pepper', '2 tbsp oil', '3 tbsp butter', '3 cloves garlic', '2 sprigs thyme'],
+    steps: ['Take the chops out 20 minutes ahead and pat them dry — wet meat steams instead of searing.', 'Season well and sear in hot oil for 4 minutes without moving them.', 'Flip, add the butter, garlic and thyme, and spoon the foaming butter over them for 3 minutes.', 'Rest for 5 minutes before serving.'],
+  },
+  {
+    title: 'Baked salmon', servings: 4, tags: ['dinner', 'quick'],
+    ingredients: ['4 salmon fillets', '2 tbsp olive oil', '1 lemon, sliced', '2 cloves garlic, minced', '1 tsp salt', '1/2 tsp black pepper'],
+    steps: ['Heat the oven to 400F.', 'Rub the fillets with the oil, garlic, salt and pepper and lay lemon over them.', 'Bake for 12 minutes, until it flakes at the thickest part but is still just translucent in the center.'],
+  },
+  {
+    title: 'Chicken stir fry', servings: 4, tags: ['dinner', 'quick'],
+    ingredients: ['1 lb chicken breast, sliced thin', '3 tbsp soy sauce', '1 tbsp cornstarch', '2 tbsp oil', '4 cups mixed vegetables', '3 cloves garlic, minced', '1 tbsp ginger, minced', '1 tsp sugar'],
+    steps: ['Toss the chicken with 1 tbsp of the soy sauce and the cornstarch.', 'Get a wide pan very hot, then sear the chicken in a single layer for 3 minutes and set aside.', 'Stir fry the vegetables for 4 minutes, adding the garlic and ginger at the end.', 'Return the chicken with the remaining soy sauce and sugar and toss for 1 minute.'],
+  },
+  {
+    title: 'Fried chicken', servings: 6, tags: ['dinner'],
+    ingredients: ['3 lb chicken pieces', '2 cups buttermilk', '2 cups all-purpose flour', '1 tbsp paprika', '1 tbsp salt', '1 tsp black pepper', '4 cups oil'],
+    steps: ['Soak the chicken in the buttermilk for 4 hours, or overnight.', 'Mix the flour with the paprika, salt and pepper.', 'Dredge each piece heavily, pressing the flour on, and rest them for 15 minutes so the coating sets.', 'Fry at 325F for 15 minutes, turning once, until the thickest piece reads 165F.', 'Drain on a rack, not paper, so the bottom stays crisp.'],
+  },
+  {
+    title: 'Chicken noodle soup', servings: 6, tags: ['dinner', 'soup'],
+    ingredients: ['1 lb chicken breast', '8 cups chicken broth', '3 carrots, sliced', '3 celery, sliced', '1 onion, diced', '8 oz egg noodles', '2 tbsp butter', '1 tsp salt', '2 sprigs thyme'],
+    steps: ['Cook the onion, carrots and celery in the butter for 6 minutes.', 'Add the broth, chicken and thyme, and simmer for 20 minutes.', 'Take the chicken out, shred it, and return it to the pot.', 'Add the noodles and cook for 8 minutes, until tender.'],
+  },
+  {
+    title: 'Tomato soup', servings: 4, tags: ['soup', 'quick'],
     ingredients: ['2 tbsp butter', '1 onion, diced', '2 cloves garlic, minced', '28 oz canned crushed tomatoes', '2 cups chicken broth', '1 tsp sugar', '1/2 cup cream', '1 tsp salt'],
     steps: ['Melt the butter in a pot and cook the onion for 6 minutes until soft and translucent.', 'Add the garlic and cook for 1 minute.', 'Pour in the tomatoes, broth and sugar, and simmer for 20 minutes.', 'Blend until smooth, then stir in the cream and salt over low heat.'],
   },
   {
-    title: 'Meatloaf', servings: 6,
-    ingredients: ['2 lb ground beef', '1 cup breadcrumbs', '1 onion, minced', '2 large eggs', '1/2 cup milk', '2 tbsp ketchup', '1 tsp salt', '1 tsp black pepper'],
-    steps: ['Heat the oven to 350°F.', 'Soak the breadcrumbs in the milk for 5 minutes — this is what keeps it from drying out.', 'Mix everything together with your hands, stopping as soon as it is combined.', 'Shape into a loaf on a lined sheet pan and brush the top with a little extra ketchup.', 'Bake for 60 minutes, until the center reads 160°F.', 'Rest for 10 minutes before slicing.'],
+    title: 'Broccoli cheddar soup', servings: 4, tags: ['soup'],
+    ingredients: ['4 tbsp butter', '1 onion, diced', '1/4 cup all-purpose flour', '2 cups chicken broth', '2 cups milk', '4 cups broccoli, chopped', '2 carrots, grated', '3 cups cheddar cheese, shredded', '1 tsp salt'],
+    steps: ['Cook the onion in the butter for 5 minutes, then whisk in the flour and cook for 1 minute.', 'Add the broth and milk slowly and bring to a simmer.', 'Add the broccoli and carrots and cook for 15 minutes, until tender.', 'Off the heat, stir in the cheese a handful at a time — boiling it makes the soup grainy.'],
   },
   {
-    title: 'Roasted vegetables', servings: 4,
+    title: 'Potato leek soup', servings: 6, tags: ['soup'],
+    ingredients: ['3 tbsp butter', '3 leeks, sliced', '2 lb potatoes, cubed', '5 cups chicken broth', '1/2 cup cream', '1 tsp salt', '1/2 tsp black pepper'],
+    steps: ['Cook the leeks gently in the butter for 8 minutes, without letting them color.', 'Add the potatoes and broth and simmer for 20 minutes, until the potatoes fall apart easily.', 'Blend until smooth, then stir in the cream, salt and pepper.'],
+  },
+  {
+    title: 'Mashed potatoes', servings: 6, tags: ['side'],
+    ingredients: ['3 lb potatoes', '1/2 cup butter', '1 cup milk, warm', '2 tsp salt'],
+    steps: ['Cover the potatoes in cold salted water and boil for 20 minutes, until a knife slides in with no resistance.', 'Drain and let them steam dry in the pot for 2 minutes — wet potatoes make gluey mash.', 'Mash with the butter first, then work in the warm milk and salt.'],
+  },
+  {
+    title: 'Roasted vegetables', servings: 4, tags: ['side', 'quick'],
     ingredients: ['2 lb mixed vegetables, chopped', '3 tbsp olive oil', '1 tsp salt', '1/2 tsp black pepper', '2 cloves garlic, minced'],
-    steps: ['Heat the oven to 425°F.', 'Toss everything together and spread on a sheet pan in a single layer — crowding the pan steams them instead of roasting them.', 'Roast for 30 minutes, turning once halfway, until browned at the edges.'],
+    steps: ['Heat the oven to 425F.', 'Toss everything together and spread on a sheet pan in a single layer — crowding the pan steams them instead of roasting them.', 'Roast for 30 minutes, turning once halfway, until browned at the edges.'],
+  },
+  {
+    title: 'Buttermilk biscuits', servings: 8, tags: ['side', 'baking'],
+    ingredients: ['2 cups all-purpose flour', '1 tbsp baking powder', '1 tsp salt', '6 tbsp butter, cold', '3/4 cup buttermilk, cold'],
+    steps: ['Heat the oven to 450F.', 'Whisk the flour, baking powder and salt together.', 'Cut the cold butter in until the mixture looks like coarse crumbs with some pea-sized pieces left.', 'Stir in the buttermilk just until it comes together — the dough should look shaggy.', 'Pat to one inch thick, fold it over on itself three times, then pat out again and cut rounds.', 'Bake for 12 minutes, until risen and golden.'],
+  },
+  {
+    title: 'Skillet cornbread', servings: 8, tags: ['side', 'baking'],
+    ingredients: ['1 cup cornmeal', '1 cup all-purpose flour', '2 tbsp sugar', '1 tbsp baking powder', '1 tsp salt', '2 large eggs', '1 cup buttermilk', '4 tbsp butter, melted'],
+    steps: ['Heat the oven to 425F with a skillet inside.', 'Whisk the dry ingredients, then stir in the eggs, buttermilk and butter until just combined.', 'Pour into the hot skillet — it should sizzle — and bake for 22 minutes, until the top springs back.'],
+  },
+  {
+    title: 'Green bean casserole', servings: 6, tags: ['side'],
+    ingredients: ['2 lb green beans, trimmed', '3 tbsp butter', '3 tbsp all-purpose flour', '1 1/2 cups milk', '8 oz mushrooms, sliced', '1 tsp salt', '1 cup fried onions'],
+    steps: ['Blanch the beans for 4 minutes and drain.', 'Cook the mushrooms in the butter for 6 minutes, then whisk in the flour.', 'Add the milk slowly and cook until it thickens, then season.', 'Fold in the beans, top with the fried onions, and bake at 375F for 25 minutes.'],
+  },
+  {
+    title: 'Coleslaw', servings: 8, tags: ['side', 'quick'],
+    ingredients: ['1 head cabbage, shredded', '2 carrots, grated', '1 cup mayonnaise', '2 tbsp vinegar', '2 tbsp sugar', '1 tsp salt', '1/2 tsp black pepper'],
+    steps: ['Whisk the mayonnaise, vinegar, sugar, salt and pepper together.', 'Toss with the cabbage and carrots.', 'Chill for 60 minutes before serving so it softens and the dressing loosens.'],
+  },
+  {
+    title: 'Potato salad', servings: 8, tags: ['side'],
+    ingredients: ['3 lb potatoes, cubed', '4 large eggs', '1 cup mayonnaise', '2 tbsp mustard', '3 celery, diced', '1 onion, minced', '1 tsp salt'],
+    steps: ['Boil the potatoes for 15 minutes, until just tender, and drain.', 'Hard-boil the eggs for 10 minutes, then cool, peel and chop them.', 'Whisk the mayonnaise with the mustard and salt.', 'Fold everything together while the potatoes are still warm so they take on the dressing.', 'Chill for 2 hours before serving.'],
+  },
+  {
+    title: 'Rice pilaf', servings: 6, tags: ['side', 'quick'],
+    ingredients: ['2 tbsp butter', '1 onion, minced', '1 1/2 cups rice', '3 cups chicken broth', '1 tsp salt', '2 tbsp parsley, chopped'],
+    steps: ['Cook the onion in the butter for 4 minutes.', 'Add the rice and stir for 2 minutes, until the grains look glossy.', 'Pour in the broth and salt, bring to a boil, then cover and cook on low for 18 minutes.', 'Rest off the heat for 5 minutes, then fluff and stir through the parsley.'],
+  },
+  {
+    title: 'Chocolate chip cookies', servings: 24, tags: ['dessert', 'baking'],
+    ingredients: ['2 1/4 cups all-purpose flour', '1 tsp baking soda', '1 tsp salt', '1 cup butter, softened', '3/4 cup sugar', '3/4 cup brown sugar', '2 large eggs', '2 tsp vanilla extract', '2 cups chocolate chips'],
+    steps: ['Heat the oven to 375F and line two sheet pans.', 'Whisk the flour, baking soda and salt together.', 'Beat the butter with both sugars until light, about 3 minutes.', 'Beat in the eggs one at a time, then the vanilla.', 'Mix in the dry ingredients on low, then fold in the chocolate chips.', 'Drop rounded tablespoons two inches apart and bake for 10 minutes, until the edges are set but the centers still look soft.', 'Cool on the pan for 5 minutes before moving them.'],
+  },
+  {
+    title: 'Banana bread', servings: 8, tags: ['dessert', 'baking'],
+    ingredients: ['3 ripe bananas, mashed', '1/3 cup butter, melted', '3/4 cup sugar', '1 large egg', '1 tsp vanilla extract', '1 tsp baking soda', '1/2 tsp salt', '1 1/2 cups all-purpose flour'],
+    steps: ['Heat the oven to 350F and butter a loaf pan.', 'Mix the mashed bananas with the melted butter.', 'Stir in the sugar, egg and vanilla.', 'Sprinkle the baking soda and salt over the top and stir through.', 'Fold in the flour just until no dry streaks remain.', 'Pour into the pan and bake for 55 minutes, until a skewer comes out clean.'],
+  },
+  {
+    title: 'Fudge brownies', servings: 16, tags: ['dessert', 'baking'],
+    ingredients: ['1 cup butter', '2 cups sugar', '4 large eggs', '1 tsp vanilla extract', '3/4 cup cocoa powder', '1 cup all-purpose flour', '1/2 tsp salt'],
+    steps: ['Heat the oven to 350F and line a square pan.', 'Melt the butter and whisk in the sugar, then the eggs one at a time and the vanilla.', 'Sift in the cocoa, flour and salt and fold until just combined — beating it makes them cakey.', 'Bake for 30 minutes, until the center is set but a skewer still comes out with moist crumbs.'],
+  },
+  {
+    title: 'Snickerdoodles', servings: 24, tags: ['dessert', 'baking'],
+    ingredients: ['2 3/4 cups all-purpose flour', '2 tsp cream of tartar', '1 tsp baking soda', '1/2 tsp salt', '1 cup butter, softened', '1 1/2 cups sugar', '2 large eggs', '2 tbsp cinnamon'],
+    steps: ['Heat the oven to 400F.', 'Whisk the flour, cream of tartar, baking soda and salt together.', 'Beat the butter with 1 1/4 cups of the sugar until fluffy, then beat in the eggs.', 'Stir in the dry ingredients.', 'Mix the remaining sugar with the cinnamon, roll balls of dough in it, and space them on sheet pans.', 'Bake for 9 minutes, until set at the edges and still soft in the middle.'],
+  },
+  {
+    title: 'Apple pie', servings: 8, tags: ['dessert', 'baking'],
+    ingredients: ['2 pie crusts', '8 apples, sliced', '3/4 cup sugar', '2 tbsp all-purpose flour', '1 tsp cinnamon', '1 tbsp lemon, juiced', '2 tbsp butter'],
+    steps: ['Heat the oven to 425F.', 'Toss the apples with the sugar, flour, cinnamon and lemon juice.', 'Pile into a crust-lined dish, dot with the butter, and lay the second crust over the top with vents cut in.', 'Bake for 20 minutes, then lower to 375F and bake for 40 minutes more, until the filling bubbles through the vents.', 'Cool for 2 hours before cutting so the filling sets.'],
+  },
+  {
+    title: 'Peach cobbler', servings: 8, tags: ['dessert', 'baking'],
+    ingredients: ['6 peaches, sliced', '1 cup sugar', '1 tbsp lemon, juiced', '1 cup all-purpose flour', '2 tsp baking powder', '1/2 tsp salt', '1/2 cup butter, melted', '1 cup milk'],
+    steps: ['Heat the oven to 375F.', 'Toss the peaches with half the sugar and the lemon juice and spread in a baking dish.', 'Whisk the flour, remaining sugar, baking powder and salt, then stir in the milk and butter.', 'Pour the batter over the fruit without stirring — it rises through as it bakes.', 'Bake for 45 minutes, until golden and bubbling at the edges.'],
+  },
+  {
+    title: 'Chocolate cake', servings: 12, tags: ['dessert', 'baking'],
+    ingredients: ['2 cups all-purpose flour', '2 cups sugar', '3/4 cup cocoa powder', '2 tsp baking soda', '1 tsp salt', '2 large eggs', '1 cup buttermilk', '1 cup coffee, hot', '1/2 cup oil', '2 tsp vanilla extract'],
+    steps: ['Heat the oven to 350F and butter two round pans.', 'Whisk all the dry ingredients together in a large bowl.', 'Add the eggs, buttermilk, oil and vanilla and beat until smooth.', 'Stir in the hot coffee last — the batter will be very thin, which is correct.', 'Divide between the pans and bake for 32 minutes, until a skewer comes out clean.', 'Cool completely in the pans before turning out.'],
   },
 ];
 
