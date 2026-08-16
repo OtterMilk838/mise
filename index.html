@@ -396,6 +396,19 @@
     white-space: nowrap;
   }
 
+  /* Already copied into your own recipes. */
+  .row-name[data-owned]::after {
+    content: "in my recipes";
+    display: inline-block;
+    margin-left: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--accent);
+    vertical-align: middle;
+  }
+
   .row-sub {
     font-size: 12.5px;
     color: var(--ink-muted);
@@ -1900,10 +1913,15 @@ const TAB_META = {
 
 let currentTab = 'pantry';
 let recipeOpenId = null;
+let recipesTab = 'mine';
+let catalogueOpenId = null;
+let catalogueQuery = '';
+let catalogueFilter = 'all';
 
 function setTab(tab) {
   currentTab = tab;
   recipeOpenId = null;
+  catalogueOpenId = null;
   document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === tab)));
   ['pantry', 'list', 'recipes'].forEach((t) => { $('#view-' + t).hidden = t !== tab; });
   $('#viewTitle').textContent = TAB_META[tab].title;
@@ -2497,43 +2515,186 @@ function editListItem(id) {
 /* ══════════════════════════════════════════════════════════════════════
    RECIPES
    ══════════════════════════════════════════════════════════════════════ */
+/** One row's status pill, shared by "mine" and the catalogue. */
+function statusPill(recipe) {
+  const s = summarize(recipe);
+  if (s.missing > 0) return { state: 'missing', label: `${s.missing} missing` };
+  if (s.short > 0) return { state: 'short', label: `${s.short} short` };
+  if (s.unverified > 0) return { state: 'unverified', label: 'check amounts' };
+  return { state: 'have', label: 'ready' };
+}
+
+function recipeRowHTML(recipe, attr) {
+  const pill = statusPill(recipe);
+  const meta = [`${recipe.ingredients.length} ingredient${recipe.ingredients.length === 1 ? '' : 's'}`];
+  if (recipe.servings) meta.push(`serves ${recipe.servings}`);
+  return `
+    <div class="row" data-state="${pill.state}">
+      <button class="row-main" ${attr}="${recipe.id}">
+        <span class="row-name">${esc(recipe.title)}</span>
+        <span class="row-sub">${esc(meta.join(' · '))}</span>
+      </button>
+      <span class="pill" data-state="${pill.state}" style="margin-right:14px">${esc(pill.label)}</span>
+    </div>`;
+}
+
 function renderRecipes() {
   const view = $('#view-recipes');
 
   if (recipeOpenId) { renderRecipeDetail(view, recipeOpenId); return; }
+  if (catalogueOpenId) { renderCatalogueDetail(view, catalogueOpenId); return; }
 
-  const recipes = [...state.recipes].sort((a, b) => b.createdAt - a.createdAt);
-
-  if (!recipes.length) {
-    view.innerHTML = `<div class="empty">
-      <h3>No recipes yet</h3>
-      <p>Paste a recipe from any site and Mise will pull out the ingredients and steps — or start from a handful of classics.</p>
-      <button class="btn btn-primary" id="loadStarters" style="margin-top:20px;max-width:280px">Add 10 starter recipes</button>
+  const tabs = `
+    <div class="toolbar">
+      <div class="segment" style="flex:1" role="group" aria-label="Recipe source">
+        <button type="button" data-rtab="mine" style="flex:1" aria-pressed="${recipesTab === 'mine'}">My recipes${state.recipes.length ? ` (${state.recipes.length})` : ''}</button>
+        <button type="button" data-rtab="browse" style="flex:1" aria-pressed="${recipesTab === 'browse'}">Browse (${CATALOGUE.length})</button>
+      </div>
     </div>`;
-    $('#loadStarters').onclick = loadStarterRecipes;
-    return;
-  }
 
-  let html = `<div class="rows" style="padding-top:8px">`;
-  for (const r of recipes) {
-    const summary = summarize(r);
-    html += `
-      <div class="row">
-        <button class="row-main" data-openrecipe="${r.id}">
-          <span class="row-name">${esc(r.title)}</span>
-          <span class="row-sub">${r.ingredients.length} ingredient${r.ingredients.length === 1 ? '' : 's'}${r.servings ? ` · serves ${r.servings}` : ''}</span>
-        </button>
-        <span class="pill" data-state="${summary.missing > 0 ? 'missing' : (summary.unverified > 0 ? 'unverified' : 'have')}" style="margin-right:14px">
-          ${summary.missing > 0 ? `${summary.missing} missing` : (summary.unverified > 0 ? 'check amounts' : 'ready')}
-        </span>
-      </div>`;
-  }
-  html += `</div>`;
-  view.innerHTML = html;
+  view.innerHTML = recipesTab === 'browse' ? tabs + browseHTML() : tabs + mineHTML();
 
+  view.querySelectorAll('[data-rtab]').forEach((b) => {
+    b.onclick = () => { recipesTab = b.dataset.rtab; renderRecipes(); };
+  });
   view.querySelectorAll('[data-openrecipe]').forEach((b) => {
     b.onclick = () => { recipeOpenId = b.dataset.openrecipe; render(); };
   });
+  view.querySelectorAll('[data-opencat]').forEach((b) => {
+    b.onclick = () => { catalogueOpenId = b.dataset.opencat; render(); };
+  });
+  view.querySelectorAll('[data-cfilter]').forEach((b) => {
+    b.onclick = () => { catalogueFilter = b.dataset.cfilter; renderRecipes(); };
+  });
+
+  const search = view.querySelector('#catSearch');
+  if (search) {
+    search.oninput = () => {
+      catalogueQuery = search.value;
+      const list = view.querySelector('#catList');
+      if (list) list.innerHTML = catalogueListHTML();
+      wireCatalogueRows(view);
+      const count = view.querySelector('#catCount');
+      if (count) count.textContent = `${searchCatalogue(catalogueQuery, catalogueFilter).length}`;
+    };
+    // Keep the caret where it was while typing.
+    search.value = catalogueQuery;
+  }
+  const browseBtn = view.querySelector('#goBrowse');
+  if (browseBtn) browseBtn.onclick = () => { recipesTab = 'browse'; renderRecipes(); };
+}
+
+function wireCatalogueRows(view) {
+  view.querySelectorAll('[data-opencat]').forEach((b) => {
+    b.onclick = () => { catalogueOpenId = b.dataset.opencat; render(); };
+  });
+}
+
+function mineHTML() {
+  const recipes = [...state.recipes].sort((a, b) => b.createdAt - a.createdAt);
+
+  if (!recipes.length) {
+    return `<div class="empty">
+      <h3>No recipes of your own yet</h3>
+      <p>Paste one from any site with the + button, or take something from the browse list.</p>
+      <button class="btn btn-primary" id="goBrowse" style="margin-top:20px;max-width:280px">Browse ${CATALOGUE.length} recipes</button>
+    </div>`;
+  }
+  return `<div class="rows">${recipes.map((r) => recipeRowHTML(r, 'data-openrecipe')).join('')}</div>`;
+}
+
+function catalogueListHTML() {
+  const results = searchCatalogue(catalogueQuery, catalogueFilter);
+
+  if (!results.length) {
+    return `<div class="empty">
+      <h3>Nothing matches</h3>
+      <p>${catalogueFilter === 'ready'
+        ? 'Nothing here can be made from what’s at home right now. Try “Almost” or clear the filter.'
+        : 'Try a different search.'}</p>
+    </div>`;
+  }
+  return results.map((r) => {
+    const owned = inMyRecipes(r);
+    const row = recipeRowHTML(r, 'data-opencat');
+    return owned ? row.replace('class="row-name"', 'class="row-name" data-owned="1"') : row;
+  }).join('');
+}
+
+function browseHTML() {
+  const count = searchCatalogue(catalogueQuery, catalogueFilter).length;
+  return `
+    <div style="padding:0 20px 10px">
+      <input class="input" id="catSearch" type="search" placeholder="Search recipes or an ingredient" autocapitalize="none" autocorrect="off" value="${esc(catalogueQuery)}">
+    </div>
+    <div class="toolbar" style="padding-top:0">
+      <div class="segment" style="flex:1" role="group" aria-label="Filter recipes">
+        <button type="button" data-cfilter="all" style="flex:1" aria-pressed="${catalogueFilter === 'all'}">All</button>
+        <button type="button" data-cfilter="ready" style="flex:1" aria-pressed="${catalogueFilter === 'ready'}">Can make now</button>
+        <button type="button" data-cfilter="almost" style="flex:1" aria-pressed="${catalogueFilter === 'almost'}">Almost</button>
+      </div>
+    </div>
+    <div class="section-head"><h2>${catalogueFilter === 'ready' ? 'Ready to cook' : catalogueFilter === 'almost' ? 'One or two short' : 'All recipes'}</h2><span class="section-count" id="catCount">${count}</span></div>
+    <div class="rows" id="catList">${catalogueListHTML()}</div>`;
+}
+
+function renderCatalogueDetail(view, id) {
+  const r = CATALOGUE.find((x) => x.id === id);
+  if (!r) { catalogueOpenId = null; renderRecipes(); return; }
+
+  const owned = inMyRecipes(r);
+  const s = summarize(r);
+
+  const rows = r.ingredients.map((ing) => {
+    const a = availabilityFor(ing, state.pantry, state.aliases);
+    const detail = [];
+    if (ing.quantity != null) detail.push(qtyLabel(ing.quantity, ing.unit));
+    if (ing.prep) detail.push(ing.prep);
+    return `
+      <div class="row" data-state="${a.state}">
+        <div class="row-main" style="cursor:default">
+          <span class="row-name">${esc(ing.name)}</span>
+          ${detail.length ? `<span class="row-sub">${esc(detail.join(' · '))}</span>` : ''}
+        </div>
+        <span class="pill" data-state="${a.state}" style="margin-right:14px">${STATE_LABEL[a.state]}</span>
+      </div>`;
+  }).join('');
+
+  view.innerHTML = `
+    <div class="toolbar" style="padding-top:0">
+      <button class="linkish" id="backToBrowse">‹ Browse</button>
+    </div>
+    <div class="recipe-head">
+      <h2 class="recipe-title">${esc(r.title)}</h2>
+      <div class="recipe-meta">
+        <span>${r.servings ? `Serves ${r.servings}` : 'Servings not given'}</span>
+        <span>· ${r.steps.length} step${r.steps.length === 1 ? '' : 's'}</span>
+        ${r.tags.length ? `<span>· ${esc(r.tags.join(', '))}</span>` : ''}
+      </div>
+    </div>
+    <div class="summary-bar">
+      ${s.have ? `<span class="pill" data-state="have">${s.have} have</span>` : ''}
+      ${s.short ? `<span class="pill" data-state="short">${s.short} short</span>` : ''}
+      ${s.missing ? `<span class="pill" data-state="missing">${s.missing} missing</span>` : ''}
+      ${s.unverified ? `<span class="pill" data-state="unverified">${s.unverified} unverified</span>` : ''}
+    </div>
+    <div class="toolbar">
+      <button class="btn btn-primary" id="takeRecipe" style="flex:1">${owned ? 'Open in my recipes' : 'Add to my recipes'}</button>
+    </div>
+    <div class="section-head"><h2>Ingredients</h2><span class="section-count">${r.ingredients.length}</span></div>
+    <div class="rows">${rows}</div>
+    <div class="section-head"><h2>Method</h2></div>
+    <ol class="steps">${r.steps.map((st) => `<li>${esc(st.text)}</li>`).join('')}</ol>`;
+
+  $('#backToBrowse').onclick = () => { catalogueOpenId = null; render(); };
+  $('#takeRecipe').onclick = () => {
+    const id = addFromCatalogue(r);
+    catalogueOpenId = null;
+    recipesTab = 'mine';
+    recipeOpenId = id;
+    render();
+    if (!owned) toast(`${r.title} added to your recipes`);
+  };
 }
 
 function summarize(recipe) {
@@ -2899,11 +3060,13 @@ function importRecipe() {
   });
 }
 
-/* ---- starter recipes -------------------------------------------------
-   Written for Mise, not copied from any cookbook. Plain versions of the
-   classics, meant as something to cook from on day one and to give the
-   availability check real data to work against. */
-const STARTER_RECIPES = [
+/* ---- catalogue -------------------------------------------------------
+   Recipes shipped with the app, browsable and searchable, kept separate
+   from your own until you add one. Ingredients and steps are stored as
+   plain strings and parsed once at startup.
+
+   Written for Mise, not copied from any cookbook. */
+const CATALOGUE_RAW = [
   {
     title: 'Buttermilk pancakes', servings: 4,
     ingredients: ['2 cups all-purpose flour', '2 tbsp sugar', '2 tsp baking powder', '1 tsp baking soda', '1 tsp salt', '2 large eggs', '2 cups buttermilk', '3 tbsp butter, melted'],
@@ -2956,25 +3119,60 @@ const STARTER_RECIPES = [
   },
 ];
 
-function loadStarterRecipes() {
-  let added = 0;
-  for (const s of STARTER_RECIPES) {
-    if (state.recipes.some((r) => r.title === s.title)) continue;
-    state.recipes.push({
-      id: uid(),
-      title: s.title,
-      servings: s.servings,
-      yieldText: null,
-      sourceUrl: null,
-      ingredients: s.ingredients.map(parseIngredient),
-      steps: s.steps.map((text) => ({ text, timerSeconds: detectTimer(text) })),
-      createdAt: Date.now(),
-    });
-    added++;
-  }
+/** Parsed once at startup; the browse list reads from this. */
+const CATALOGUE = CATALOGUE_RAW.map((r, i) => ({
+  id: `cat-${i}`,
+  title: r.title,
+  servings: r.servings ?? null,
+  tags: r.tags || [],
+  yieldText: null,
+  sourceUrl: null,
+  createdAt: 0,
+  ingredients: r.ingredients.map(parseIngredient),
+  steps: r.steps.map((text) => ({ text, timerSeconds: detectTimer(text) })),
+}));
+
+/** Copies a catalogue recipe into your own, so it can be edited and cooked. */
+function addFromCatalogue(cat) {
+  const already = state.recipes.find((r) => r.title === cat.title);
+  if (already) return already.id;
+
+  const copy = {
+    id: uid(),
+    title: cat.title,
+    servings: cat.servings,
+    yieldText: null,
+    sourceUrl: null,
+    ingredients: JSON.parse(JSON.stringify(cat.ingredients)),
+    steps: JSON.parse(JSON.stringify(cat.steps)),
+    createdAt: Date.now(),
+  };
+  state.recipes.push(copy);
   save();
-  render();
-  toast(`Added ${added} starter recipe${added === 1 ? '' : 's'}`);
+  return copy.id;
+}
+
+const inMyRecipes = (cat) => state.recipes.some((r) => r.title === cat.title);
+
+/** Title and ingredient names both count, so "chicken" finds what uses it. */
+function searchCatalogue(query, filter) {
+  const q = query.trim().toLowerCase();
+
+  return CATALOGUE.filter((r) => {
+    if (q) {
+      const haystack = [r.title, ...r.tags, ...r.ingredients.map((i) => i.name)].join(' ').toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    if (filter === 'ready') {
+      const s = summarize(r);
+      return s.missing === 0 && s.short === 0;
+    }
+    if (filter === 'almost') {
+      const s = summarize(r);
+      return s.missing + s.short > 0 && s.missing + s.short <= 2;
+    }
+    return true;
+  });
 }
 
 /* ══════════════════════════════════════════════════════════════════════
