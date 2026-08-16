@@ -452,6 +452,10 @@
 
   .stepper-unit { font-size: 12px; font-weight: 500; color: var(--ink-muted); }
 
+  /* Batch counts are single digits — reclaim the width for the recipe title. */
+  .stepper-compact button { width: 38px; }
+  .stepper-compact .stepper-value { min-width: 20px; }
+
   /* ── Checkbox (shopping list) ──────────────────────────────────────── */
   .check {
     appearance: none;
@@ -813,17 +817,22 @@
     z-index: 70;
     background: var(--ink);
     color: var(--ground);
-    padding: 11px 17px;
+    padding: 12px 17px;
     border-radius: 11px;
     font-size: 14.5px;
     font-weight: 500;
+    line-height: 1.35;
     box-shadow: var(--shadow);
-    max-width: calc(100% - 40px);
+    /* A fixed width, not max-width: as a shrink-to-fit flex box the message
+       collapsed to a narrow column whenever an action button sat beside it. */
+    width: min(560px, calc(100% - 40px));
     display: flex;
     align-items: center;
     gap: 14px;
     animation: rise .2s ease;
   }
+
+  .toast span { flex: 1; min-width: 0; }
 
   .toast[hidden] { display: none; }
 
@@ -3602,9 +3611,9 @@ function renderPlan() {
           <span class="row-name">${esc(recipe.title)}</span>
           <span class="row-sub">${entry.batches > 1 ? `${entry.batches} batches · ` : ''}${recipe.servings ? `${recipe.servings * entry.batches} servings` : `${recipe.ingredients.length} ingredients`}</span>
         </button>
-        <div class="stepper">
+        <div class="stepper stepper-compact">
           <button data-planbatch="-1" data-id="${entry.id}" aria-label="Fewer batches of ${esc(recipe.title)}">${ICON.minus}</button>
-          <span class="stepper-value" style="min-width:34px">${entry.batches}</span>
+          <span class="stepper-value">${entry.batches}</span>
           <button data-planbatch="1" data-id="${entry.id}" aria-label="More batches of ${esc(recipe.title)}">${ICON.plus}</button>
         </div>
       </div>`;
