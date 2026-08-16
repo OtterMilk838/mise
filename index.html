@@ -686,6 +686,29 @@
     text-underline-offset: 2px;
   }
 
+  .scale-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 12px 20px 2px;
+    padding: 10px 8px 10px 15px;
+    background: var(--surface);
+    border-radius: 13px;
+    box-shadow: var(--shadow);
+  }
+
+  .scale-label { display: block; font-size: 16px; font-weight: 600; }
+  .scale-note { display: block; font-size: 12.5px; color: var(--ink-muted); margin-top: 1px; }
+
+  .scale-reset {
+    min-width: 42px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
   .summary-bar {
     display: flex;
     gap: 6px;
@@ -1231,38 +1254,136 @@ function recipeFromJsonLd(node) {
   return { title, servings, yieldText, ingredients, steps, via: 'structured data' };
 }
 
-const ING_HEADING = /^(ingredients?|what you(?:'|’)?ll need|you will need)\s*:?\s*$/i;
-const STEP_HEADING = /^(instructions?|directions?|method|steps?|preparation|how to make it)\s*:?\s*$/i;
+const ING_HEADING = /^(ingredients?|whatyou(?:'|’)?llneed|youwillneed)\s*:?\s*$/i;
+const STEP_HEADING = /^(instructions?|directions?|method|steps?|preparation|howtomakeit|recipe|tomake)\s*:?\s*$/i;
+
+/* PDFs and design tools letter-space their headings — "I N G R E D I E N T S"
+   arrives with a space between every character. Collapsing all whitespace
+   before testing catches both that and the ordinary spelling. */
+const isIngHeading = (line) => ING_HEADING.test(line.replace(/\s+/g, ''));
+const isStepHeading = (line) => STEP_HEADING.test(line.replace(/\s+/g, ''));
+
+/**
+ * Splits a paste containing several recipes.
+ *
+ * Prefers an explicit "---" separator. Failing that, a second ingredients
+ * heading means a second recipe started, and the line before it is its title.
+ */
+function splitRecipeBlocks(text) {
+  const explicit = text.split(/^\s*-{3,}\s*$/m).map((s) => s.trim()).filter(Boolean);
+  if (explicit.length > 1) return explicit;
+
+  const lines = text.split('\n');
+  const headings = [];
+  lines.forEach((l, i) => { if (isIngHeading(l.trim())) headings.push(i); });
+  if (headings.length < 2) return [text];
+
+  // Walk back over blank lines to find where each recipe's title begins.
+  const starts = headings.map((i) => {
+    let j = i - 1;
+    while (j > 0 && !lines[j].trim()) j--;
+    while (j > 0 && lines[j - 1].trim() && !isStepHeading(lines[j - 1].trim())) j--;
+    return Math.max(0, j);
+  });
+  starts[0] = 0;
+
+  const blocks = [];
+  for (let b = 0; b < starts.length; b++) {
+    blocks.push(lines.slice(starts[b], starts[b + 1] ?? lines.length).join('\n'));
+  }
+  return blocks.filter((s) => s.trim());
+}
+
+/** Repairs words broken across lines by PDF extraction: "Ser ve" -> "Serve". */
+function healBrokenWords(text) {
+  return text
+    // A line ending mid-word, continued on the next line.
+    .replace(/([a-z]{2,})\s*\n\s*([a-z]{1,3})\b/g, (m, a, b) => `${a}${b}`)
+    .replace(/\bser\s+ve\b/gi, (m) => (m[0] === 'S' ? 'Serve' : 'serve'))
+    .replace(/\binst\s*ruc\s*tions\b/gi, 'instructions')
+    .replace(/\bB\s+ring\b/g, 'Bring')
+    .replace(/\bsp\s*rinkle\b/gi, 'sprinkle')
+    .replace(/\bp\s+reheat\b/gi, 'preheat')
+    .replace(/\bchop\s+up\b/gi, 'chop')
+    .replace(/\s+,/g, ',')
+    .replace(/[ \t]{2,}/g, ' ');
+}
 
 /* Fallback for pasted visible text. Uses section headings when the page has
    them, and falls back to shape: lines that open with a quantity read as
    ingredients, longer sentences read as steps. */
-function parseRecipeText(text) {
+function parseRecipeText(rawText) {
+  const text = healBrokenWords(rawText);
   const lines = text.split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
   if (!lines.length) return null;
 
-  let title = '';
+  const titleParts = [];
   const ingredients = [];
   const steps = [];
   let mode = 'head';
   let yieldText = null;
   let servings = null;
+  let sawIngHeading = false;
+
+  /* A wrapped ingredient continues the line above it. The tell is a long
+     previous line followed by a short one that starts lowercase and carries
+     no quantity of its own — "1 pound of boneless chicken" / "thighs, skin
+     on". Deliberately conservative: a genuine unquantified ingredient like
+     "Parmesan cheese" is capitalised, and short lists never trigger it. */
+  const isWrappedContinuation = (line, previous) =>
+    !!previous &&
+    previous.length >= 22 &&
+    !/[.;:!?]$/.test(previous) &&
+    /^[a-z(]/.test(line) &&
+    !/^[\d½⅓⅔¼¾⅛]/.test(line) &&
+    line.length <= 40;
 
   for (const line of lines) {
-    if (ING_HEADING.test(line))  { mode = 'ing';  continue; }
-    if (STEP_HEADING.test(line)) { mode = 'step'; continue; }
+    if (isIngHeading(line))  { mode = 'ing'; sawIngHeading = true; continue; }
+    if (isStepHeading(line)) { mode = 'step'; continue; }
 
     const y = line.match(/^(?:yield|servings?|serves|makes)\s*:?\s*(.+)$/i);
     if (y) { const p = parseYield(y[1]); servings = p.servings; yieldText = p.yieldText; continue; }
 
     if (mode === 'head') {
-      if (!title) { title = line.replace(/^#+\s*/, ''); continue; }
-      // Untitled preamble before a heading — ignore prose, keep looking.
+      // Titles wrap too — collect the lines before the ingredients heading.
+      if (titleParts.join(' ').length < 70) titleParts.push(line.replace(/^#+\s*/, ''));
       continue;
     }
-    if (mode === 'ing')  { ingredients.push(line.replace(/^[-•*·▢]\s*/, '')); continue; }
-    if (mode === 'step') { steps.push(line.replace(/^\d+[.)]\s*/, '')); continue; }
+
+    if (mode === 'ing') {
+      const clean = line.replace(/^[-•*·▢]\s*/, '');
+
+      // Some recipes list everything on one comma-separated line. Three or
+      // more commas in a long line means a list, not one ingredient with a
+      // prep note ("1 lb chicken thighs, skin on" stays whole).
+      if ((clean.match(/,/g) || []).length >= 3 && clean.length > 60) {
+        clean.split(',').map((s) => s.trim()).filter(Boolean).forEach((part) => ingredients.push(part));
+        continue;
+      }
+
+      const previous = ingredients[ingredients.length - 1];
+      if (isWrappedContinuation(clean, previous)) ingredients[ingredients.length - 1] = `${previous} ${clean}`;
+      else ingredients.push(clean);
+      continue;
+    }
+
+    if (mode === 'step') {
+      const clean = line.replace(/^\d+[.)]\s*/, '');
+      const previous = steps[steps.length - 1];
+      // Steps wrap constantly; a line not starting a new number continues one.
+      if (previous && !/^\d+[.)]/.test(line) && /^[a-z(&,]/.test(clean)) {
+        steps[steps.length - 1] = `${previous} ${clean}`;
+      } else {
+        steps.push(clean);
+      }
+      continue;
+    }
   }
+
+  // Only trust a multi-line title when a real heading told us where it ended;
+  // otherwise the "title" is just the first line of unstructured text.
+  const title = (sawIngHeading ? titleParts.join(' ') : titleParts[0] || '').trim();
 
   // No headings at all: separate by shape.
   if (!ingredients.length && !steps.length) {
@@ -1289,6 +1410,13 @@ function parsePastedRecipe(text) {
   const fromText = parseRecipeText(text);
   if (fromText && (fromText.ingredients.length || fromText.steps.length)) return fromText;
   return null;
+}
+
+/** One paste, any number of recipes. Always returns an array. */
+function parsePastedRecipes(text) {
+  return splitRecipeBlocks(text)
+    .map(parsePastedRecipe)
+    .filter(Boolean);
 }
 
 /* ---- receipt parsing -------------------------------------------------
@@ -1443,6 +1571,63 @@ function parseReceipt(text) {
   return lines.map((l) => parseReceiptLine(l, false)).filter(Boolean);
 }
 
+/* ---- equipment and time ----------------------------------------------
+   Both are read from the steps rather than stored, so they work on recipes
+   saved before this existed and on anything pasted in later. */
+const EQUIPMENT = [
+  { key: 'air fryer',   label: 'Air fryer',   re: /\bair\s?-?\s?fry(er|ing)?\b/i },
+  { key: 'oven',        label: 'Oven',        re: /\b(oven|bake[sd]?|baking|roast(ed|ing)?|broil)\b/i },
+  { key: 'slow cooker', label: 'Slow cooker', re: /\b(slow\s?cooker|crock\s?pot)\b/i },
+  { key: 'grill',       label: 'Grill',       re: /\bgrill(ed|ing)?\b/i },
+  { key: 'microwave',   label: 'Microwave',   re: /\bmicrowave\b/i },
+  { key: 'blender',     label: 'Blender',     re: /\b(blend(er|ed)?|food processor|purée|puree)\b/i },
+  { key: 'stovetop',    label: 'Stovetop',    re: /\b(pan|skillet|pot|saucepan|wok|griddle|simmer|saut|boil|sear|fry|fried|frying|stove|burner)\b/i },
+];
+
+/** Detected appliances, or ['no cook'] when the steps involve no heat. */
+function recipeEquipment(recipe) {
+  const all = recipe.steps.map((s) => s.text).join(' ');
+  // Remove air-fryer mentions before testing stovetop, or "air fry" would
+  // also register as frying in a pan.
+  const withoutAirFryer = all.replace(/\bair\s?-?\s?fry(er|ing)?\b/gi, ' ');
+
+  const found = [];
+  for (const e of EQUIPMENT) {
+    const haystack = e.key === 'stovetop' ? withoutAirFryer : all;
+    if (e.re.test(haystack)) found.push(e.key);
+  }
+  return found.length ? found : ['no cook'];
+}
+
+/** Every duration mentioned in a piece of text, in seconds. */
+function sumDurations(text) {
+  let total = 0;
+  // "3 more minutes" and "5 additional minutes" are ordinary phrasings, so a
+  // couple of filler words are allowed between the number and its unit.
+  const re = /(\d+)(?:\s*(?:-|–|to)\s*(\d+))?\s*(?:more\s+|additional\s+|extra\s+|further\s+)?(second|sec|minute|min|hour|hr)s?\b/gi;
+  let m;
+  while ((m = re.exec(text))) {
+    const n = Number(m[1]);
+    const unit = m[3].toLowerCase();
+    total += unit.startsWith('sec') ? n : unit.startsWith('min') ? n * 60 : n * 3600;
+  }
+  return total;
+}
+
+/** Rough total time in minutes, or null when the recipe never says. */
+function recipeMinutes(recipe) {
+  const seconds = recipe.steps.reduce((sum, s) => sum + sumDurations(s.text), 0);
+  return seconds ? Math.max(1, Math.round(seconds / 60)) : null;
+}
+
+function formatMinutes(mins) {
+  if (mins == null) return '';
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h} hr ${m} min` : `${h} hr`;
+}
+
 /* ---- availability --------------------------------------------------- */
 /* Five states, per spec §6. Tuned conservative: a false "you have it"
    ruins a recipe mid-cook, a false "you're missing it" costs a duplicate. */
@@ -1515,7 +1700,7 @@ function planTotals(plan, recipes, aliases) {
     if (!recipe) continue;
     const batches = Math.max(1, entry.batches || 1);
 
-    for (const ing of recipe.ingredients) {
+    for (const ing of scaledIngredients(recipe, batches)) {
       if (!ing.nameKey) continue;
       const key = aliases[ing.nameKey] || ing.nameKey;
       const existing = totals.get(key);
@@ -1525,7 +1710,7 @@ function planTotals(plan, recipes, aliases) {
           key,
           name: ing.name,
           unit: ing.unit || 'count',
-          needed: ing.quantity == null ? 0 : ing.quantity * batches,
+          needed: ing.quantity == null ? 0 : ing.quantity,
           unknown: ing.quantity == null,
           usedBy: [recipe.title],
         });
@@ -1535,7 +1720,7 @@ function planTotals(plan, recipes, aliases) {
       if (!existing.usedBy.includes(recipe.title)) existing.usedBy.push(recipe.title);
 
       if (ing.quantity == null || !ing.unit) { existing.unknown = true; continue; }
-      const converted = convertAmount(ing.quantity * batches, ing.unit, existing.unit, key);
+      const converted = convertAmount(ing.quantity, ing.unit, existing.unit, key);
       if (converted === null) existing.unknown = true;
       else existing.needed += converted;
     }
@@ -1566,7 +1751,7 @@ function planTotals(plan, recipes, aliases) {
    should take out of the pantry. Returns a plan rather than mutating, so the
    UI can show it and let the cook uncheck anything they didn't actually use. */
 function deductionPlan(recipe, pantry, aliases) {
-  return recipe.ingredients.map((ing) => {
+  return scaledIngredients(recipe).map((ing) => {
     const match = findPantryMatch(ing.nameKey, pantry, aliases);
 
     if (!match) return { ing, match: null, status: 'unmatched', amount: null };
@@ -1992,6 +2177,7 @@ let recipesTab = 'mine';
 let catalogueOpenId = null;
 let catalogueQuery = '';
 let catalogueFilter = 'all';
+let catalogueGear = 'any';
 
 function setTab(tab) {
   currentTab = tab;
@@ -2602,7 +2788,12 @@ function statusPill(recipe) {
 
 function recipeRowHTML(recipe, attr) {
   const pill = statusPill(recipe);
-  const meta = [`${recipe.ingredients.length} ingredient${recipe.ingredients.length === 1 ? '' : 's'}`];
+  const mins = recipeMinutes(recipe);
+  const gear = recipeEquipment(recipe);
+
+  const meta = [];
+  if (mins) meta.push(formatMinutes(mins));
+  meta.push(gear.slice(0, 2).join(' + '));
   if (recipe.servings) meta.push(`serves ${recipe.servings}`);
   return `
     <div class="row" data-state="${pill.state}">
@@ -2641,6 +2832,9 @@ function renderRecipes() {
   });
   view.querySelectorAll('[data-cfilter]').forEach((b) => {
     b.onclick = () => { catalogueFilter = b.dataset.cfilter; renderRecipes(); };
+  });
+  view.querySelectorAll('[data-gear]').forEach((b) => {
+    b.onclick = () => { catalogueGear = b.dataset.gear; renderRecipes(); };
   });
 
   const search = view.querySelector('#catSearch');
@@ -2710,6 +2904,14 @@ function browseHTML() {
         <button type="button" data-cfilter="almost" style="flex:1" aria-pressed="${catalogueFilter === 'almost'}">Almost</button>
       </div>
     </div>
+    <div style="padding:0 20px 4px">
+      <div class="chips" role="group" aria-label="What you cook it with">
+        <button type="button" class="chip" data-gear="any" aria-pressed="${catalogueGear === 'any'}">Anything</button>
+        ${gearCounts().map(({ key, label, n }) =>
+          `<button type="button" class="chip" data-gear="${esc(key)}" aria-pressed="${catalogueGear === key}">${esc(label)} ${n}</button>`
+        ).join('')}
+      </div>
+    </div>
     <div class="section-head"><h2>${catalogueFilter === 'ready' ? 'Ready to cook' : catalogueFilter === 'almost' ? 'One or two short' : 'All recipes'}</h2><span class="section-count" id="catCount">${count}</span></div>
     <div class="rows" id="catList">${catalogueListHTML()}</div>`;
 }
@@ -2721,7 +2923,7 @@ function renderCatalogueDetail(view, id) {
   const owned = inMyRecipes(r);
   const s = summarize(r);
 
-  const rows = r.ingredients.map((ing) => {
+  const rows = scaledIngredients(r).map((ing) => {
     const a = availabilityFor(ing, state.pantry, state.aliases);
     const detail = [];
     if (ing.quantity != null) detail.push(qtyLabel(ing.quantity, ing.unit));
@@ -2783,7 +2985,7 @@ function renderCatalogueDetail(view, id) {
 
 function summarize(recipe) {
   let missing = 0, short = 0, unverified = 0, have = 0;
-  for (const ing of recipe.ingredients) {
+  for (const ing of scaledIngredients(recipe)) {
     const a = availabilityFor(ing, state.pantry, state.aliases);
     if (a.state === 'missing' || a.state === 'unmatched') missing++;
     else if (a.state === 'short') short++;
@@ -2806,7 +3008,7 @@ function renderRecipeDetail(view, id) {
   const r = state.recipes.find((x) => x.id === id);
   if (!r) { recipeOpenId = null; renderRecipes(); return; }
 
-  const rows = r.ingredients.map((ing) => {
+  const rows = scaledIngredients(r).map((ing) => {
     const a = availabilityFor(ing, state.pantry, state.aliases);
     const detail = [];
     if (ing.quantity != null) detail.push(qtyLabel(ing.quantity, ing.unit));
@@ -2828,9 +3030,21 @@ function renderRecipeDetail(view, id) {
     <div class="recipe-head">
       <h2 class="recipe-title">${esc(r.title)}</h2>
       <div class="recipe-meta">
-        <button class="linkish" id="editServings">${r.servings ? `Serves ${r.servings}` : 'Serves —'}</button>
-        ${!r.servings && r.yieldText ? `<span>· source said “${esc(r.yieldText)}”</span>` : ''}
+        ${recipeMinutes(r) ? `<span>${esc(formatMinutes(recipeMinutes(r)))}</span><span>·</span>` : ''}
+        <span>${esc(recipeEquipment(r).join(' + '))}</span>
         <span>· ${r.steps.length} step${r.steps.length === 1 ? '' : 's'}</span>
+        ${!r.servings && r.yieldText ? `<span>· source said “${esc(r.yieldText)}”</span>` : ''}
+      </div>
+    </div>
+    <div class="scale-bar">
+      <div>
+        <span class="scale-label">${esc(scaleLabel(r))}</span>
+        ${scaleOf(r) !== 1 ? `<span class="scale-note">scaled from ${r.servings ? `${r.servings} servings` : 'the full recipe'}</span>` : `<span class="scale-note">tap − or + to make more or less</span>`}
+      </div>
+      <div class="stepper stepper-compact">
+        <button id="scaleDown" aria-label="Make less">${ICON.minus}</button>
+        <button id="scaleReset" class="scale-reset" aria-label="Reset to the full recipe">${formatQuantity(scaleOf(r))}×</button>
+        <button id="scaleUp" aria-label="Make more">${ICON.plus}</button>
       </div>
     </div>
     <div class="summary-bar">
@@ -2885,7 +3099,13 @@ function renderRecipeDetail(view, id) {
     render();
     toast(`${r.title} added to this week`, 'View week', () => setTab('plan'));
   };
-  $('#editServings').onclick = () => promptServings(r);
+  const rescale = (dir) => { stepScale(r, dir); save(); render(); };
+  $('#scaleDown').onclick = () => rescale(-1);
+  $('#scaleUp').onclick = () => rescale(1);
+  $('#scaleReset').onclick = () => {
+    if (scaleOf(r) !== 1) { r.scale = 1; save(); render(); }
+    else promptServings(r);
+  };
   $('#deleteRecipe').onclick = () => {
     const removed = r;
     state.recipes = state.recipes.filter((x) => x.id !== removed.id);
@@ -3141,14 +3361,66 @@ function importRecipe() {
     const text = $('#impText').value.trim();
     if (!text) { toast('Paste something first.'); $('#impText').focus(); return; }
 
-    const parsed = parsePastedRecipe(text);
-    if (!parsed) {
+    const parsed = parsePastedRecipes(text);
+    if (!parsed.length) {
       toast("Couldn't find a recipe in that. Try writing it by hand.");
       return;
     }
     closeSheet();
-    // Hand off to the normal editor, pre-filled, so it gets reviewed before saving.
-    editRecipe(null, parsed);
+
+    // One recipe goes straight to the editor for review. Several go to a
+    // list, since reviewing ten in a form would be worse than reviewing none.
+    if (parsed.length === 1) editRecipe(null, parsed[0]);
+    else reviewImportedRecipes(parsed);
+  });
+}
+
+/** Review sheet for a paste containing several recipes. */
+function reviewImportedRecipes(parsed) {
+  const rows = parsed.map((p, i) => `
+    <div class="row">
+      <button class="check" data-icheck="${i}" role="checkbox" aria-checked="true" aria-label="Import ${esc(p.title)}">
+        <span class="check-box">${ICON.check}</span>
+      </button>
+      <div class="row-main" style="cursor:default">
+        <span class="row-name">${esc(p.title)}</span>
+        <span class="row-sub">${p.ingredients.length} ingredient${p.ingredients.length === 1 ? '' : 's'} · ${p.steps.length} step${p.steps.length === 1 ? '' : 's'}${p.servings ? ` · serves ${p.servings}` : ''}</span>
+      </div>
+    </div>`).join('');
+
+  const body = `
+    <p class="hint" style="margin-top:0">Found ${parsed.length} recipes. Uncheck anything you don’t want — you can edit each one after it’s added.</p>
+    <div class="rows" style="padding:0">${rows}</div>`;
+
+  openSheet(`Import ${parsed.length} recipes`, body, `Add them`, () => {
+    let added = 0;
+    parsed.forEach((p, i) => {
+      const box = document.querySelector(`[data-icheck="${i}"]`);
+      if (!box || box.getAttribute('aria-checked') !== 'true') return;
+      if (state.recipes.some((r) => r.title === p.title)) return;
+
+      state.recipes.push({
+        id: uid(),
+        title: p.title,
+        servings: p.servings ?? null,
+        yieldText: p.yieldText ?? null,
+        sourceUrl: null,
+        ingredients: p.ingredients.map(parseIngredient),
+        steps: p.steps.map((text) => ({ text, timerSeconds: detectTimer(text) })),
+        createdAt: Date.now(),
+      });
+      added++;
+    });
+
+    save();
+    closeSheet();
+    recipesTab = 'mine';
+    render();
+    toast(added ? `Added ${added} recipe${added === 1 ? '' : 's'}` : 'Nothing was selected');
+  });
+
+  document.querySelectorAll('[data-icheck]').forEach((b) => {
+    b.onclick = () => b.setAttribute('aria-checked', String(b.getAttribute('aria-checked') !== 'true'));
   });
 }
 
@@ -3416,6 +3688,58 @@ function addFromCatalogue(cat) {
 
 const inMyRecipes = (cat) => state.recipes.some((r) => r.title === cat.title);
 
+/** Appliance chips, commonest first, with how many recipes use each. */
+function gearCounts() {
+  const counts = new Map();
+  for (const r of CATALOGUE) {
+    for (const k of recipeEquipment(r)) counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  const labels = Object.fromEntries(EQUIPMENT.map((e) => [e.key, e.label]));
+  labels['no cook'] = 'No cook';
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([key, n]) => ({ key, label: labels[key] || key, n }));
+}
+
+/* ---- scaling ---------------------------------------------------------
+   Halving a recipe rather than cooking twenty pancakes for one person.
+   The scale is stored on the recipe, and every consumer — availability,
+   the shopping list, the week plan, "I made this" — reads the scaled
+   ingredients, so what you see is what gets bought and deducted. */
+const SCALE_STEPS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4];
+
+const scaleOf = (recipe) => (recipe.scale && recipe.scale > 0 ? recipe.scale : 1);
+
+function scaledIngredients(recipe, extra = 1) {
+  const k = scaleOf(recipe) * extra;
+  if (k === 1) return recipe.ingredients;
+  return recipe.ingredients.map((i) => ({
+    ...i,
+    quantity: i.quantity == null ? null : Math.round(i.quantity * k * 1000) / 1000,
+  }));
+}
+
+function scaledServings(recipe) {
+  if (!recipe.servings) return null;
+  return Math.max(1, Math.round(recipe.servings * scaleOf(recipe)));
+}
+
+function scaleLabel(recipe) {
+  const servings = scaledServings(recipe);
+  if (servings) return `Serves ${servings}`;
+  const k = scaleOf(recipe);
+  return k === 1 ? 'Full recipe' : `${formatQuantity(k)}× recipe`;
+}
+
+function stepScale(recipe, direction) {
+  const current = scaleOf(recipe);
+  const i = SCALE_STEPS.findIndex((s) => Math.abs(s - current) < 0.001);
+  const next = i === -1
+    ? 1
+    : SCALE_STEPS[Math.min(SCALE_STEPS.length - 1, Math.max(0, i + direction))];
+  recipe.scale = next;
+}
+
 /** Title and ingredient names both count, so "chicken" finds what uses it. */
 function searchCatalogue(query, filter) {
   const q = query.trim().toLowerCase();
@@ -3425,6 +3749,7 @@ function searchCatalogue(query, filter) {
       const haystack = [r.title, ...r.tags, ...r.ingredients.map((i) => i.name)].join(' ').toLowerCase();
       if (!haystack.includes(q)) return false;
     }
+    if (catalogueGear !== 'any' && !recipeEquipment(r).includes(catalogueGear)) return false;
     if (filter === 'ready') {
       const s = summarize(r);
       return s.missing === 0 && s.short === 0;
@@ -3609,7 +3934,7 @@ function renderPlan() {
         </button>
         <button class="row-main" data-planopen="${recipe.id}">
           <span class="row-name">${esc(recipe.title)}</span>
-          <span class="row-sub">${entry.batches > 1 ? `${entry.batches} batches · ` : ''}${recipe.servings ? `${recipe.servings * entry.batches} servings` : `${recipe.ingredients.length} ingredients`}</span>
+          <span class="row-sub">${entry.batches > 1 ? `${entry.batches} batches · ` : ''}${scaledServings(recipe) ? `${scaledServings(recipe) * entry.batches} servings` : `${recipe.ingredients.length} ingredients`}${scaleOf(recipe) !== 1 ? ` · ${formatQuantity(scaleOf(recipe))}× recipe` : ''}</span>
         </button>
         <div class="stepper stepper-compact">
           <button data-planbatch="-1" data-id="${entry.id}" aria-label="Fewer batches of ${esc(recipe.title)}">${ICON.minus}</button>
@@ -3741,7 +4066,7 @@ function renderCook() {
   const step = r.steps[cook.index];
   const progress = (cook.index + 1) / r.steps.length;
 
-  const peek = r.ingredients.map((ing) =>
+  const peek = scaledIngredients(r).map((ing) =>
     `<li><span>${esc(ing.name)}</span><span class="peek-qty">${esc(qtyLabel(ing.quantity, ing.unit))}</span></li>`
   ).join('');
 
