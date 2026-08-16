@@ -194,7 +194,7 @@
   .tabbar {
     flex: none;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     border-top: 1px solid var(--line);
     background: var(--surface);
     padding-bottom: env(safe-area-inset-bottom);
@@ -876,6 +876,7 @@
   <main class="view" id="view-pantry"></main>
   <main class="view" id="view-list" hidden></main>
   <main class="view" id="view-recipes" hidden></main>
+  <main class="view" id="view-plan" hidden></main>
 
   <nav class="tabbar" role="tablist">
     <button class="tab" role="tab" data-tab="pantry" aria-selected="true">
@@ -889,6 +890,10 @@
     <button class="tab" role="tab" data-tab="recipes" aria-selected="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5v-15Z"/><path d="M5 19.5A1.5 1.5 0 0 1 6.5 18H19v3H6.5A1.5 1.5 0 0 1 5 19.5Z"/></svg>
       <span class="tab-label">Recipes</span>
+    </button>
+    <button class="tab" role="tab" data-tab="plan" aria-selected="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="m9.5 15 1.6 1.6L15 13"/></svg>
+      <span class="tab-label">Week</span><span class="tab-badge" id="planBadge" hidden>0</span>
     </button>
   </nav>
 </div>
@@ -1488,6 +1493,65 @@ function compareQuantity(need, needUnit, have, haveUnit, nameKey) {
   };
 }
 
+/* ---- week plan -------------------------------------------------------
+   Totals every planned recipe's ingredients before checking the pantry.
+   Checking recipes one at a time is misleading: with six eggs, two recipes
+   needing six each both report "have", and you are three short of the
+   second one before you start. */
+function planTotals(plan, recipes, aliases) {
+  const totals = new Map();
+
+  for (const entry of plan) {
+    const recipe = recipes.find((r) => r.id === entry.recipeId);
+    if (!recipe) continue;
+    const batches = Math.max(1, entry.batches || 1);
+
+    for (const ing of recipe.ingredients) {
+      if (!ing.nameKey) continue;
+      const key = aliases[ing.nameKey] || ing.nameKey;
+      const existing = totals.get(key);
+
+      if (!existing) {
+        totals.set(key, {
+          key,
+          name: ing.name,
+          unit: ing.unit || 'count',
+          needed: ing.quantity == null ? 0 : ing.quantity * batches,
+          unknown: ing.quantity == null,
+          usedBy: [recipe.title],
+        });
+        continue;
+      }
+
+      if (!existing.usedBy.includes(recipe.title)) existing.usedBy.push(recipe.title);
+
+      if (ing.quantity == null || !ing.unit) { existing.unknown = true; continue; }
+      const converted = convertAmount(ing.quantity * batches, ing.unit, existing.unit, key);
+      if (converted === null) existing.unknown = true;
+      else existing.needed += converted;
+    }
+  }
+
+  return [...totals.values()].map((t) => {
+    const match = findPantryMatch(t.key, state.pantry, aliases);
+    const have = match && match.quantity > 0
+      ? convertAmount(match.quantity, match.unit, t.unit, t.key)
+      : 0;
+
+    if (t.unknown) return { ...t, state: 'unverified', have, shortfall: null, match };
+    if (have === null) return { ...t, state: 'unverified', have: null, shortfall: null, match };
+    if (have >= t.needed - 1e-9) return { ...t, state: 'have', have, shortfall: 0, match };
+
+    return {
+      ...t,
+      state: have > 0 ? 'short' : 'missing',
+      have,
+      shortfall: Math.round((t.needed - have) * 100) / 100,
+      match,
+    };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /* ---- "I made this" ---------------------------------------------------
    The inverse of the availability check: work out what cooking this recipe
    should take out of the pantry. Returns a plan rather than mutating, so the
@@ -1546,7 +1610,7 @@ const STORAGE_KEY = 'mise.v1';
 const DEFAULT_SETTINGS = { removeAtZero: false };
 
 const blank = () => ({
-  pantry: [], list: [], recipes: [], aliases: {}, history: [],
+  pantry: [], list: [], recipes: [], aliases: {}, history: [], plan: [],
   settings: { ...DEFAULT_SETTINGS },
 });
 
@@ -1664,6 +1728,7 @@ function applyBackup(text) {
     recipes: data.recipes || [],
     aliases: data.aliases || {},
     history: data.history || [],
+    plan: data.plan || [],
     settings: Object.assign({ ...DEFAULT_SETTINGS }, data.settings || {}),
   });
   save();
@@ -1909,6 +1974,7 @@ const TAB_META = {
   pantry:  { title: "What's At Home", sub: 'Pantry',        add: 'Add item' },
   list:    { title: 'Shopping List',  sub: 'To buy',        add: 'Add item' },
   recipes: { title: 'Recipes',        sub: 'Your kitchen',  add: 'Add recipe' },
+  plan:    { title: 'This Week',      sub: 'Meal prep',     add: 'Add recipe' },
 };
 
 let currentTab = 'pantry';
@@ -1923,7 +1989,7 @@ function setTab(tab) {
   recipeOpenId = null;
   catalogueOpenId = null;
   document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === tab)));
-  ['pantry', 'list', 'recipes'].forEach((t) => { $('#view-' + t).hidden = t !== tab; });
+  ['pantry', 'list', 'recipes', 'plan'].forEach((t) => { $('#view-' + t).hidden = t !== tab; });
   $('#viewTitle').textContent = TAB_META[tab].title;
   $('#viewSub').textContent = TAB_META[tab].sub;
   $('#addBtn').setAttribute('aria-label', TAB_META[tab].add);
@@ -1935,6 +2001,7 @@ document.querySelectorAll('.tab').forEach((t) => { t.onclick = () => setTab(t.da
 $('#addBtn').onclick = () => {
   if (currentTab === 'pantry') editPantryItem(null);
   else if (currentTab === 'list') editListItem(null);
+  else if (currentTab === 'plan') { recipesTab = 'browse'; setTab('recipes'); }
   else chooseRecipeSource();
 };
 
@@ -2680,6 +2747,7 @@ function renderCatalogueDetail(view, id) {
     </div>
     <div class="toolbar">
       <button class="btn btn-primary" id="takeRecipe" style="flex:1">${owned ? 'Open in my recipes' : 'Add to my recipes'}</button>
+      <button class="btn" id="catToPlan" style="flex:1">Add to this week</button>
     </div>
     <div class="section-head"><h2>Ingredients</h2><span class="section-count">${r.ingredients.length}</span></div>
     <div class="rows">${rows}</div>
@@ -2687,6 +2755,13 @@ function renderCatalogueDetail(view, id) {
     <ol class="steps">${r.steps.map((st) => `<li>${esc(st.text)}</li>`).join('')}</ol>`;
 
   $('#backToBrowse').onclick = () => { catalogueOpenId = null; render(); };
+  $('#catToPlan').onclick = () => {
+    // Planning implies owning it, so the copy happens here rather than
+    // leaving the plan pointing at something that is not in your recipes.
+    addToPlan(addFromCatalogue(r));
+    render();
+    toast(`${r.title} added to this week`, 'View week', () => setTab('plan'));
+  };
   $('#takeRecipe').onclick = () => {
     const id = addFromCatalogue(r);
     catalogueOpenId = null;
@@ -2759,6 +2834,9 @@ function renderRecipeDetail(view, id) {
       <button class="btn btn-primary" id="startCooking" style="flex:1">Start cooking</button>
       <button class="btn" id="madeIt" style="flex:1">I made this</button>
     </div>
+    <div class="toolbar" style="padding-top:0">
+      <button class="btn" id="planAdd" style="flex:1">${state.plan.some((p) => p.recipeId === r.id) ? 'Add another batch to this week' : 'Add to this week'}</button>
+    </div>
     <div class="section-head"><h2>Ingredients</h2><span class="section-count">${r.ingredients.length}</span></div>
     <div class="rows">`;
 
@@ -2793,6 +2871,11 @@ function renderRecipeDetail(view, id) {
   $('#backToRecipes').onclick = () => { recipeOpenId = null; render(); };
   $('#startCooking').onclick = () => openCook(r.id);
   $('#madeIt').onclick = () => openMadeIt(r);
+  $('#planAdd').onclick = () => {
+    addToPlan(r.id);
+    render();
+    toast(`${r.title} added to this week`, 'View week', () => setTab('plan'));
+  };
   $('#editServings').onclick = () => promptServings(r);
   $('#deleteRecipe').onclick = () => {
     const removed = r;
@@ -3466,6 +3549,159 @@ async function openSettings() {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
+   WEEK PLAN
+   ══════════════════════════════════════════════════════════════════════ */
+function addToPlan(recipeId) {
+  const already = state.plan.find((p) => p.recipeId === recipeId);
+  if (already) {
+    already.batches = (already.batches || 1) + 1;
+  } else {
+    state.plan.push({ id: uid(), recipeId, batches: 1, cooked: false, addedAt: Date.now() });
+  }
+  save();
+}
+
+function renderPlan() {
+  const view = $('#view-plan');
+  const entries = state.plan
+    .map((e) => ({ entry: e, recipe: state.recipes.find((r) => r.id === e.recipeId) }))
+    .filter((x) => x.recipe);
+
+  if (!entries.length) {
+    view.innerHTML = `<div class="empty">
+      <h3>Nothing planned yet</h3>
+      <p>Pick what you want to cook this week and Mise totals every ingredient across all of it, then tells you what to buy.</p>
+      <button class="btn btn-primary" id="planBrowse" style="margin-top:20px;max-width:280px">Browse recipes</button>
+    </div>`;
+    $('#planBrowse').onclick = () => setTab('recipes');
+    return;
+  }
+
+  const needs = planTotals(state.plan, state.recipes, state.aliases);
+  const toBuy = needs.filter((n) => n.state === 'missing' || n.state === 'short');
+  const cookedCount = entries.filter((x) => x.entry.cooked).length;
+
+  let html = `
+    <div class="summary-bar" style="padding-top:2px">
+      <span class="pill">${entries.length} meal${entries.length === 1 ? '' : 's'}</span>
+      ${cookedCount ? `<span class="pill" data-state="have">${cookedCount} cooked</span>` : ''}
+      ${toBuy.length ? `<span class="pill" data-state="missing">${toBuy.length} to buy</span>` : `<span class="pill" data-state="have">nothing to buy</span>`}
+    </div>
+
+    <div class="section-head"><h2>This week</h2><span class="section-count">${entries.length}</span></div>
+    <div class="rows">`;
+
+  for (const { entry, recipe } of entries) {
+    const pill = statusPill(recipe);
+    html += `
+      <div class="row ${entry.cooked ? 'is-checked' : ''}" data-state="${entry.cooked ? 'have' : pill.state}">
+        <button class="check" data-plancook="${entry.id}" role="checkbox" aria-checked="${!!entry.cooked}" aria-label="${entry.cooked ? 'Mark not cooked' : 'Mark cooked'} ${esc(recipe.title)}">
+          <span class="check-box">${ICON.check}</span>
+        </button>
+        <button class="row-main" data-planopen="${recipe.id}">
+          <span class="row-name">${esc(recipe.title)}</span>
+          <span class="row-sub">${entry.batches > 1 ? `${entry.batches} batches · ` : ''}${recipe.servings ? `${recipe.servings * entry.batches} servings` : `${recipe.ingredients.length} ingredients`}</span>
+        </button>
+        <div class="stepper">
+          <button data-planbatch="-1" data-id="${entry.id}" aria-label="Fewer batches of ${esc(recipe.title)}">${ICON.minus}</button>
+          <span class="stepper-value" style="min-width:34px">${entry.batches}</span>
+          <button data-planbatch="1" data-id="${entry.id}" aria-label="More batches of ${esc(recipe.title)}">${ICON.plus}</button>
+        </div>
+      </div>`;
+  }
+  html += `</div>`;
+
+  if (toBuy.length) {
+    html += `
+      <div class="section-head"><h2>Still need</h2><span class="section-count">${toBuy.length}</span></div>
+      <div class="rows">`;
+    for (const n of toBuy) {
+      const shortfall = n.shortfall != null ? `${formatQuantity(n.shortfall)} ${unitLabel(n.unit)}`.trim() : '';
+      const across = n.usedBy.length > 1 ? ` · for ${n.usedBy.length} recipes` : '';
+      html += `
+        <div class="row" data-state="${n.state}">
+          <div class="row-main" style="cursor:default">
+            <span class="row-name">${esc(n.name)}</span>
+            <span class="row-sub">need ${esc(formatQuantity(n.needed))} ${esc(unitLabel(n.unit))}${n.have ? `, have ${esc(formatQuantity(n.have))}` : ''}${esc(across)}</span>
+          </div>
+          <span class="pill" data-state="${n.state}" style="margin-right:14px">${shortfall ? esc('+' + shortfall) : STATE_LABEL[n.state]}</span>
+        </div>`;
+    }
+    html += `</div>
+      <div class="toolbar" style="padding-top:14px">
+        <button class="btn btn-primary" id="planToList" style="flex:1">Add ${toBuy.length} to shopping list</button>
+      </div>`;
+  } else {
+    html += `<div class="empty" style="padding:34px 40px">
+      <h3>You have everything</h3>
+      <p>Every ingredient for this week is already at home.</p>
+    </div>`;
+  }
+
+  const enough = needs.filter((n) => n.state === 'have').length;
+  html += `<p class="hint" style="padding:4px 20px 0">Totalled across every meal — ${enough} ingredient${enough === 1 ? '' : 's'} covered by what's at home.</p>
+    <div class="toolbar" style="padding-top:14px">
+      <button class="btn" id="planClear" style="flex:1">Clear the week</button>
+    </div>`;
+
+  view.innerHTML = html;
+
+  view.querySelectorAll('[data-planbatch]').forEach((b) => {
+    b.onclick = () => {
+      const entry = state.plan.find((p) => p.id === b.dataset.id);
+      if (!entry) return;
+      entry.batches = Math.max(1, (entry.batches || 1) + Number(b.dataset.planbatch));
+      save();
+      renderPlan();
+    };
+  });
+
+  view.querySelectorAll('[data-planopen]').forEach((b) => {
+    b.onclick = () => { recipeOpenId = b.dataset.planopen; setTab('recipes'); };
+  });
+
+  view.querySelectorAll('[data-plancook]').forEach((b) => {
+    b.onclick = () => {
+      const entry = state.plan.find((p) => p.id === b.dataset.plancook);
+      if (!entry) return;
+      entry.cooked = !entry.cooked;
+      save();
+      render(); // not renderPlan — the tab badge counts uncooked meals
+      if (entry.cooked) {
+        const recipe = state.recipes.find((r) => r.id === entry.recipeId);
+        if (recipe) toast(`${recipe.title} cooked`, 'Update pantry', () => openMadeIt(recipe));
+      }
+    };
+  });
+
+  const toList = $('#planToList');
+  if (toList) toList.onclick = () => {
+    let added = 0;
+    for (const n of toBuy) {
+      if (state.list.some((i) => !i.checked && i.nameKey === n.key)) continue;
+      state.list.push({
+        id: uid(), name: n.name, nameKey: n.key,
+        quantity: n.shortfall != null ? n.shortfall : null,
+        unit: n.unit, note: null, category: guessCategory(n.name),
+        checked: false, checkedAt: null, sourceRecipeId: null, addedAt: Date.now(),
+      });
+      added++;
+    }
+    save();
+    render();
+    toast(added ? `Added ${added} item${added === 1 ? '' : 's'}` : 'Already on your list', 'View', () => setTab('list'));
+  };
+
+  $('#planClear').onclick = () => {
+    const undo = state.plan;
+    state.plan = [];
+    save();
+    render();
+    toast('Week cleared', 'Undo', () => { state.plan = undo; save(); render(); });
+  };
+}
+
+/* ══════════════════════════════════════════════════════════════════════
    COOK MODE
    ══════════════════════════════════════════════════════════════════════ */
 let cook = { recipeId: null, index: 0, timerEnd: null, tick: null, wakeLock: null };
@@ -3580,12 +3816,18 @@ function stopTimer(reset) {
 function render() {
   if (currentTab === 'pantry') renderPantry();
   else if (currentTab === 'list') renderList();
+  else if (currentTab === 'plan') renderPlan();
   else renderRecipes();
 
-  const count = state.list.filter((i) => !i.checked).length;
-  const badge = $('#listBadge');
-  badge.textContent = count;
-  badge.hidden = count === 0;
+  const toBuy = state.list.filter((i) => !i.checked).length;
+  const listBadge = $('#listBadge');
+  listBadge.textContent = toBuy;
+  listBadge.hidden = toBuy === 0;
+
+  const planned = state.plan.filter((p) => !p.cooked).length;
+  const planBadge = $('#planBadge');
+  planBadge.textContent = planned;
+  planBadge.hidden = planned === 0;
 }
 
 purgeOldChecked();
